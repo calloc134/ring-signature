@@ -195,7 +195,7 @@ mod tests {
         assert!(!ring_verify(&ring_pubs, &ring_sig, wrong_message, b)?);
         Ok(())
     }
-    // エラーハンドリングのテスト (空のリング)  -> panicするはず
+    // エラーハンドリングのテスト (空のリング)
     #[test]
     fn test_ring_sign_empty_ring() {
         let rsa_bits = 512;
@@ -209,7 +209,6 @@ mod tests {
                 .collect::<Vec<PublicKey>>()
                 .as_slice(),
             0,
-            // &ring[0].secret, // ここでpanicさせない
             &SecretKey {
                 d: BigUint::one(),
                 n: BigUint::one(),
