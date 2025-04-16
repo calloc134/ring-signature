@@ -111,24 +111,24 @@ fn main() -> Result<()> {
             .map(|b| format!("{:02x}", b))
             .collect::<String>()
     );
-    println!(
-        "リング署名の各メンバーのxの値: {}",
-        ring_sig
-            .xs
-            .iter()
-            .map(|x| format!("{:02x}", x)) // Consider limiting output size
-            .collect::<Vec<String>>()
-            .join(", ")
-    );
-    println!(
-        "リング署名のグルー値v: {}",
-        ring_sig
-            .v
-            .to_bytes_be()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
-    );
+    // println!(
+    //     "リング署名の各メンバーのxの値: {}",
+    //     ring_sig
+    //         .xs
+    //         .iter()
+    //         .map(|x| format!("{:02x}", x)) // Consider limiting output size
+    //         .collect::<Vec<String>>()
+    //         .join(", ")
+    // );
+    // println!(
+    //     "リング署名のグルー値v: {}",
+    //     ring_sig
+    //         .v
+    //         .to_bytes_be()
+    //         .iter()
+    //         .map(|b| format!("{:02x}", b))
+    //         .collect::<String>()
+    // );
 
     println!("Verifying ring signature...");
     // let ring_pubs_verify: Vec<PublicKey> = keypair_vec.iter().map(|kp| kp.public.clone()).collect(); // Use loaded keys
