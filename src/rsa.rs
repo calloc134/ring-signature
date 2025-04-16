@@ -166,10 +166,12 @@ mod tests {
     use sha3::Digest;
     use sha3::Sha3_256;
 
+    const TEST_RSA_BITS: usize = 2048; // Use 2048 bits for tests
+
     #[test]
     fn test_rsa_sign_success() {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let keypair = generate_keypair(rsa_bits, &mut rng).unwrap();
         let b = keypair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let message = b"Test message";
@@ -182,7 +184,7 @@ mod tests {
     #[test]
     fn test_rsa_sign_fail() {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let keypair = generate_keypair(rsa_bits, &mut rng).unwrap();
         let b = keypair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let message = b"Test message";
@@ -198,7 +200,7 @@ mod tests {
     #[test]
     fn test_g_inverse() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap(); //鍵ペアを作成
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
@@ -219,7 +221,7 @@ mod tests {
     #[test]
     fn test_g_inverse_near_n() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
@@ -234,7 +236,7 @@ mod tests {
     #[test]
     fn test_g_inverse_multiple_of_n() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
@@ -250,7 +252,7 @@ mod tests {
     #[test]
     fn test_g_success() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let x = rng.gen_biguint(b as u64);
@@ -269,7 +271,7 @@ mod tests {
     #[test]
     fn test_g_zero() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let x = BigUint::zero();
@@ -284,7 +286,7 @@ mod tests {
     #[test]
     fn test_g_inverse_success() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let y = rng.gen_biguint(b as u64);
@@ -303,7 +305,7 @@ mod tests {
     #[test]
     fn test_g_inverse_zero() {
         let mut rng = thread_rng();
-        let bits = 512;
+        let bits = TEST_RSA_BITS; // Use constant
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let y = BigUint::zero();
@@ -360,7 +362,7 @@ mod tests {
 
         // Generate a keypair and save it to PEM files for the test
         let mut rng = thread_rng();
-        let bits = 512; // Use a smaller size for faster test generation
+        let bits = TEST_RSA_BITS; // Use constant // Use a smaller size for faster test generation
         let keypair = generate_keypair(bits, &mut rng)?;
         let priv_pem = keypair.secret.to_pkcs1_pem(Default::default())?; // Assuming SecretKey can be converted back easily or using the 'rsa' crate's types directly
         let pub_pem = keypair.public.to_public_key_pem(Default::default())?; // Assuming PublicKey can be converted back easily

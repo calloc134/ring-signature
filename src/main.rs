@@ -15,17 +15,6 @@ fn main() -> Result<()> {
     let member1_pub_key_path = key_dir.join("member1_public.pem");
     let member2_pub_key_path = key_dir.join("member2_public.pem");
 
-    // --- Remove Key Generation ---
-    // let mut rng = thread_rng();
-    // let rsa_bits = 512;
-    // let keypair_vec: Vec<_> = (0..3)
-    //     .map(|_| generate_keypair(rsa_bits, &mut rng))
-    //     .collect::<Result<_>>()?;
-    //
-    // for (i, keypair) in keypair_vec.iter().enumerate() {
-    //     println!("鍵ペア {}: {:?}", i, keypair);
-    // }
-
     // --- Load Keys ---
     println!("Loading keys from PEM files...");
     let signer_secret_key = load_secret_key_from_pem(signer_priv_key_path.to_str().unwrap())?;

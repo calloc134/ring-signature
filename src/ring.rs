@@ -139,10 +139,12 @@ mod tests {
     use num_traits::One;
     use rand::thread_rng;
 
+    const TEST_RSA_BITS: usize = 2048; // Use 2048 bits for tests
+
     #[test]
     fn test_ring_sign_success() -> Result<()> {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
             ring.push(generate_keypair(rsa_bits, &mut rng)?);
@@ -169,7 +171,7 @@ mod tests {
     #[test]
     fn test_ring_sign_fail() -> Result<()> {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
             ring.push(generate_keypair(rsa_bits, &mut rng)?);
@@ -198,7 +200,7 @@ mod tests {
     // エラーハンドリングのテスト (空のリング)
     #[test]
     fn test_ring_sign_empty_ring() {
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let ring: Vec<KeyPair> = Vec::new(); // 空のリング
         let b = rsa_bits + COMMON_DOMAIN_BIT_LENGTH_ADDITION; // 仮の b
         let message = b"Empty Ring Test";
@@ -222,7 +224,7 @@ mod tests {
     #[test]
     fn test_ring_sign_invalid_signer_index() {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
             ring.push(generate_keypair(rsa_bits, &mut rng).unwrap());
@@ -247,7 +249,7 @@ mod tests {
     #[test]
     fn test_ring_sign_various_signers() -> Result<()> {
         let mut rng = thread_rng();
-        let rsa_bits = 512;
+        let rsa_bits = TEST_RSA_BITS; // Use constant
         let ring_size = 5; // リングサイズを固定
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..ring_size {
