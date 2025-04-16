@@ -32,13 +32,15 @@ pub fn ring_sign(
     m: &[u8],
     b: usize,
 ) -> Result<RingSignature> {
+    // infoには主要パラメータのみ、詳細はdebugで出力
     info!(
-        "リング署名生成開始: ring_size = {}, signer = {}, m = {:?}, b = {}",
+        "リング署名生成開始: ring_size = {}, signer = {}, m_len = {}, b = {}",
         ring.len(),
         signer,
-        m,
+        m.len(),
         b
     );
+    debug!("リング署名生成開始: m = {:?}", m);
 
     // リングが空の場合エラー
     if ring.is_empty() {
@@ -119,7 +121,13 @@ pub fn ring_sign(
 
     // リング署名オブジェクトを作成
     let ring_signature = RingSignature { v, xs };
-    info!("リング署名生成完了: ring_signature = {:?}", ring_signature);
+    // infoには主要パラメータのみ、詳細はdebugで出力
+    info!(
+        "リング署名生成完了: v bits = {}, xs_len = {}",
+        ring_signature.v.bits(),
+        ring_signature.xs.len()
+    );
+    debug!("リング署名生成完了: ring_signature = {:?}", ring_signature);
     Ok(ring_signature)
 }
 
@@ -129,13 +137,16 @@ pub fn ring_sign(
 /// m: 検証対象のメッセージ
 /// b: 共通ドメインのビット長
 pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) -> Result<bool> {
+    // infoには主要パラメータのみ、詳細はdebugで出力
     info!(
-        "リング署名検証開始: ring_size = {}, sig = {:?}, m = {:?}, b = {}",
+        "リング署名検証開始: ring_size = {}, sig.v bits = {}, sig.xs_len = {}, m_len = {}, b = {}",
         ring.len(),
-        sig,
-        m,
+        sig.v.bits(),
+        sig.xs.len(),
+        m.len(),
         b
     );
+    debug!("リング署名検証開始: sig = {:?}, m = {:?}", sig, m);
     // メッセージのハッシュ値を計算 (対称鍵暗号の鍵 k として使用)
     let hash = Sha3_256::digest(m);
     debug!("ring_verify: hash = {:?}", hash);

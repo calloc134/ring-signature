@@ -86,11 +86,20 @@ pub fn g_inverse(secret: &SecretKey, y: &BigUint, _b: usize) -> BigUint {
 /// m: 署名対象のメッセージ (ハッシュ化・パディング済み)
 /// b: 共通ドメインのビット長
 pub fn rsa_sign(key: &KeyPair, m: &BigUint, b: usize) -> Result<BigUint> {
-    info!("RSA署名生成開始: key = {:?}, m = {}, b = {}", key, m, b);
+    // infoには主要パラメータのみ、詳細はdebugで出力
+    info!(
+        "RSA署名生成開始: key.n bits = {}, m bits = {}, b = {}",
+        key.public.n.bits(),
+        m.bits(),
+        b
+    );
+    debug!("RSA署名生成開始: key = {:?}, m = {}", key, m);
     // g_inverseは失敗しない前提だが、将来的な拡張のためResult型に
     // 秘密鍵を用いて g 関数の逆関数を計算し、署名とする
     let signature = g_inverse(&key.secret, m, b);
-    info!("RSA署名生成完了: signature = {}", signature);
+    // infoにはビット数のみ表示し、内容はdebugで出力
+    info!("RSA署名生成完了: {} bits", signature.bits());
+    debug!("RSA署名生成完了: signature = {}", signature);
     Ok(signature)
 }
 
@@ -100,9 +109,17 @@ pub fn rsa_sign(key: &KeyPair, m: &BigUint, b: usize) -> Result<BigUint> {
 /// signature: 検証対象の署名
 /// b: 共通ドメインのビット長
 pub fn rsa_verify(pubkey: &PublicKey, m: &BigUint, signature: &BigUint, b: usize) -> Result<bool> {
+    // infoには主要パラメータのみ、詳細はdebugで出力
     info!(
-        "RSA署名検証開始: pubkey = {:?}, m = {}, signature = {}, b = {}",
-        pubkey, m, signature, b
+        "RSA署名検証開始: pubkey.n bits = {}, m bits = {}, signature bits = {}, b = {}",
+        pubkey.n.bits(),
+        m.bits(),
+        signature.bits(),
+        b
+    );
+    debug!(
+        "RSA署名検証開始: pubkey = {:?}, m = {}, signature = {}",
+        pubkey, m, signature
     );
     // 公開鍵を用いて g 関数を署名に適用し、元のメッセージ m と一致するか検証
     let verification = g(pubkey, signature, b) == *m;
