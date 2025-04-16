@@ -1,7 +1,10 @@
 use anyhow::Result;
+use num_traits::One;
 use ring_signature::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION; // constants モジュールを使用
 use ring_signature::ring::{ring_sign, ring_verify};
-use ring_signature::rsa::{load_public_key_from_pem, load_secret_key_from_pem, PublicKey};
+use ring_signature::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
+use ring_signature::rsa::{rsa_sign, rsa_verify};
+use sha3::Digest;
 use std::path::Path; // For path joining
 
 fn main() -> Result<()> {
@@ -49,22 +52,33 @@ fn main() -> Result<()> {
     let message = b"Hello RSA and Ring Signature!";
 
     // --- Remove RSA Sign/Verify Example ---
-    // let b = keypair_vec[0].public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    // let hash = Sha3_256::digest(message);
-    // let m = BigUint::from_bytes_be(&hash) % (BigUint::one() << b);
-    //
-    // let signature = rsa_sign(&keypair_vec[0], &m, b)?;
-    // println!(
-    //     "署名: {}",
-    //     signature
-    //         .to_bytes_be()
-    //         .iter()
-    //         .map(|b| format!("{:02x}", b))
-    //         .collect::<String>()
-    // );
-    //
-    // let rsa_verify_result = rsa_verify(&keypair_vec[0].public, &m, &signature, b)?;
-    // println!("通常RSA署名検証結果: {}", rsa_verify_result);
+    println!("Signing message with RSA...");
+    // Calculate parameter 'b' for RSA: use the signer's public key modulus size plus the constant addition.
+    let rsa_b = signer_public_key.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+    // Compute the hash of the message using SHA3-256 (ensure the 'sha3' crate is included in Cargo.toml)
+    let hash = sha3::Sha3_256::digest(message);
+    // Convert the hash to a BigUint and reduce it modulo 2^b (requires the 'num-bigint' and 'num-traits' crates)
+    let m = num_bigint::BigUint::from_bytes_be(&hash) % (num_bigint::BigUint::one() << rsa_b);
+
+    // Generate the RSA signature using the signer's key pair
+    let signer_keypair = KeyPair {
+        public: signer_public_key.clone(),
+        secret: signer_secret_key.clone(),
+    };
+    let rsa_signature = rsa_sign(&signer_keypair, &m, rsa_b)?;
+    println!(
+        "RSA署名: {}",
+        rsa_signature
+            .to_bytes_be()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
+    );
+
+    println!("Verifying RSA signature...");
+    // Verify the RSA signature using the signer's public key
+    let rsa_verify_result = rsa_verify(&signer_public_key, &m, &rsa_signature, rsa_b)?;
+    println!("通常RSA署名検証結果: {}", rsa_verify_result);
 
     // --- Ring Signature using Loaded Keys ---
     // Calculate b based on the maximum modulus size in the loaded ring
@@ -97,24 +111,24 @@ fn main() -> Result<()> {
             .map(|b| format!("{:02x}", b))
             .collect::<String>()
     );
-    // println!(
-    //     "リング署名の各メンバーのxの値: {}",
-    //     ring_sig
-    //         .xs
-    //         .iter()
-    //         .map(|x| format!("{:02x}", x)) // Consider limiting output size
-    //         .collect::<Vec<String>>()
-    //         .join(", ")
-    // );
-    // println!(
-    //     "リング署名のグルー値v: {}", // Redundant with the line above
-    //     ring_sig
-    //         .v
-    //         .to_bytes_be()
-    //         .iter()
-    //         .map(|b| format!("{:02x}", b))
-    //         .collect::<String>()
-    // );
+    println!(
+        "リング署名の各メンバーのxの値: {}",
+        ring_sig
+            .xs
+            .iter()
+            .map(|x| format!("{:02x}", x)) // Consider limiting output size
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
+    println!(
+        "リング署名のグルー値v: {}",
+        ring_sig
+            .v
+            .to_bytes_be()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
+    );
 
     println!("Verifying ring signature...");
     // let ring_pubs_verify: Vec<PublicKey> = keypair_vec.iter().map(|kp| kp.public.clone()).collect(); // Use loaded keys
