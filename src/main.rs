@@ -51,6 +51,8 @@ fn main() -> Result<()> {
 
     let message = b"Hello RSA and Ring Signature!";
 
+    println!("Message: {}", String::from_utf8_lossy(message));
+
     // --- Remove RSA Sign/Verify Example ---
     println!("Signing message with RSA...");
     // Calculate parameter 'b' for RSA: use the signer's public key modulus size plus the constant addition.
