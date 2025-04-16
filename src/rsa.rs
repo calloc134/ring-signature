@@ -7,6 +7,14 @@ use num_integer::Integer;
 use num_prime::RandPrime;
 use num_traits::{One, Zero};
 use rand::Rng;
+use rsa::{
+    // pkcs1::DecodeRsaPrivateKey, // Removed PKCS#1 import for private key
+    pkcs8::{DecodePrivateKey, DecodePublicKey}, // Added DecodePrivateKey for PKCS#8
+    traits::{PrivateKeyParts, PublicKeyParts},
+    RsaPrivateKey,
+    RsaPublicKey,
+};
+use std::fs; // Added for file reading // Added for PEM parsing
 
 // RSA公開鍵
 #[derive(Clone, Debug)]
@@ -109,6 +117,42 @@ pub fn generate_keypair(bits: usize, rng: &mut impl Rng) -> Result<KeyPair> {
     };
     info!("RSA鍵ペア生成完了: keypair = {:?}", keypair);
     Ok(keypair)
+}
+
+/// Load RSA Public Key from PEM file (SPKI format)
+pub fn load_public_key_from_pem(filepath: &str) -> Result<PublicKey> {
+    info!("Loading public key from PEM: {}", filepath);
+    let pem_str = fs::read_to_string(filepath)?;
+    // Try parsing as PKCS#1 first, then SPKI if needed, though SPKI is more standard for public keys.
+    // RsaPublicKey::from_public_key_pem expects SPKI format.
+    // If your key is in PKCS#1 public key format, you might need from_pkcs1_pem.
+    // Let's assume SPKI format for public keys as it's common.
+    // If PKCS#1 public key format is used, use RsaPublicKey::from_pkcs1_pem(&pem_str)?
+    let rsa_pub_key = RsaPublicKey::from_public_key_pem(&pem_str)
+        .map_err(|e| RsaError::Other(format!("Failed to parse public key PEM: {}", e)))?;
+
+    let n = BigUint::from_bytes_be(rsa_pub_key.n().to_bytes_be().as_slice());
+    let e = BigUint::from_bytes_be(rsa_pub_key.e().to_bytes_be().as_slice());
+    info!(
+        "Public key loaded successfully: n bits = {}, e = {}",
+        n.bits(),
+        e
+    );
+    Ok(PublicKey { n, e })
+}
+
+/// Load RSA Secret Key from PEM file (PKCS#8 format)
+pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
+    info!("Loading secret key from PEM: {}", filepath);
+    let pem_str = fs::read_to_string(filepath)?;
+    // Assuming PKCS#8 format for private keys.
+    let rsa_priv_key = RsaPrivateKey::from_pkcs8_pem(&pem_str)
+        .map_err(|e| RsaError::Other(format!("Failed to parse private key PEM (PKCS#8): {}", e)))?;
+
+    let n = BigUint::from_bytes_be(rsa_priv_key.n().to_bytes_be().as_slice());
+    let d = BigUint::from_bytes_be(rsa_priv_key.d().to_bytes_be().as_slice());
+    info!("Secret key loaded successfully: n bits = {}", n.bits());
+    Ok(SecretKey { d, n })
 }
 
 #[cfg(test)]
@@ -300,4 +344,43 @@ mod tests {
         // 逆元は存在しない
         assert_eq!(inv, None);
     }
+
+    // Example of how a test *could* look (requires creating test key files)
+    /*
+    #[test]
+    fn test_load_keys_from_pem() -> Result<()> {
+        // Create dummy PEM files for testing purposes in a 'test_keys' directory
+        // For example: test_keys/test_pub.pem, test_keys/test_priv.pem
+        // Ensure these files exist before running the test.
+        let test_pub_path = "test_keys/test_pub.pem";
+        let test_priv_path = "test_keys/test_priv.pem";
+
+        // Create the directory if it doesn't exist
+        fs::create_dir_all("test_keys").expect("Failed to create test_keys directory");
+
+        // Generate a keypair and save it to PEM files for the test
+        let mut rng = thread_rng();
+        let bits = 512; // Use a smaller size for faster test generation
+        let keypair = generate_keypair(bits, &mut rng)?;
+        let priv_pem = keypair.secret.to_pkcs1_pem(Default::default())?; // Assuming SecretKey can be converted back easily or using the 'rsa' crate's types directly
+        let pub_pem = keypair.public.to_public_key_pem(Default::default())?; // Assuming PublicKey can be converted back easily
+        fs::write(test_priv_path, priv_pem)?;
+        fs::write(test_pub_path, pub_pem)?;
+
+
+        let public_key = load_public_key_from_pem(test_pub_path)?;
+        let secret_key = load_secret_key_from_pem(test_priv_path)?;
+
+        assert_eq!(public_key.n, secret_key.n);
+        // Add more assertions if needed, e.g., comparing with original generated values
+
+        // Clean up test files
+        fs::remove_file(test_pub_path)?;
+        fs::remove_file(test_priv_path)?;
+        fs::remove_dir("test_keys")?;
+
+
+        Ok(())
+    }
+    */
 }
