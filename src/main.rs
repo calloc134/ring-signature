@@ -12,7 +12,7 @@ use sha3::Digest;
 // パス操作用
 use std::path::Path;
 // ログ出力用
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 
 fn main() -> Result<()> {
     // ロガー初期化
