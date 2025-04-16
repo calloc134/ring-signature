@@ -1,4 +1,6 @@
 use crate::constants;
+use crate::error::RsaError;
+use anyhow::Result;
 use log::{debug, info, trace};
 use num_bigint::BigUint;
 use num_integer::Integer;
@@ -52,26 +54,27 @@ pub fn g_inverse(secret: &SecretKey, y: &BigUint, _b: usize) -> BigUint {
 }
 
 /// RSA署名生成
-pub fn rsa_sign(key: &KeyPair, m: &BigUint, b: usize) -> BigUint {
+pub fn rsa_sign(key: &KeyPair, m: &BigUint, b: usize) -> Result<BigUint> {
     info!("RSA署名生成開始: key = {:?}, m = {}, b = {}", key, m, b);
+    // g_inverseは失敗しない前提だが、将来的な拡張のためResult型に
     let signature = g_inverse(&key.secret, m, b);
     info!("RSA署名生成完了: signature = {}", signature);
-    signature
+    Ok(signature)
 }
 
 /// RSA署名検証
-pub fn rsa_verify(pubkey: &PublicKey, m: &BigUint, signature: &BigUint, b: usize) -> bool {
+pub fn rsa_verify(pubkey: &PublicKey, m: &BigUint, signature: &BigUint, b: usize) -> Result<bool> {
     info!(
         "RSA署名検証開始: pubkey = {:?}, m = {}, signature = {}, b = {}",
         pubkey, m, signature, b
     );
     let verification = g(pubkey, signature, b) == *m;
     info!("RSA署名検証結果: {}", verification);
-    verification
+    Ok(verification)
 }
 
 /// RSA鍵ペア生成
-pub fn generate_keypair(bits: usize, rng: &mut impl Rng) -> KeyPair {
+pub fn generate_keypair(bits: usize, rng: &mut impl Rng) -> Result<KeyPair> {
     info!("RSA鍵ペア生成開始: bits = {}", bits);
     let p: BigUint = rng.gen_prime_exact(bits / 2, None);
     let q: BigUint = rng.gen_prime_exact(bits / 2, None);
@@ -85,7 +88,10 @@ pub fn generate_keypair(bits: usize, rng: &mut impl Rng) -> KeyPair {
 
     let e = BigUint::from(constants::E);
 
-    let d = e.modinv(&phi).expect("e and phi must be coprime");
+    let d = match e.modinv(&phi) {
+        Some(val) => val,
+        None => return Err(RsaError::NotCoprime.into()),
+    };
     debug!("generate_keypair: d = {}", d);
 
     let keypair = KeyPair {
@@ -96,7 +102,7 @@ pub fn generate_keypair(bits: usize, rng: &mut impl Rng) -> KeyPair {
         secret: SecretKey { d, n },
     };
     info!("RSA鍵ペア生成完了: keypair = {:?}", keypair);
-    keypair
+    Ok(keypair)
 }
 
 #[cfg(test)]
@@ -114,36 +120,36 @@ mod tests {
     fn test_rsa_sign_success() {
         let mut rng = thread_rng();
         let rsa_bits = 512;
-        let keypair = generate_keypair(rsa_bits, &mut rng);
+        let keypair = generate_keypair(rsa_bits, &mut rng).unwrap();
         let b = keypair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let message = b"Test message";
         let hash = Sha3_256::digest(message);
         let m = BigUint::from_bytes_be(&hash) % (BigUint::one() << b);
-        let signature = rsa_sign(&keypair, &m, b);
-        assert!(rsa_verify(&keypair.public, &m, &signature, b));
+        let signature = rsa_sign(&keypair, &m, b).unwrap();
+        assert!(rsa_verify(&keypair.public, &m, &signature, b).unwrap());
     }
 
     #[test]
     fn test_rsa_sign_fail() {
         let mut rng = thread_rng();
         let rsa_bits = 512;
-        let keypair = generate_keypair(rsa_bits, &mut rng);
+        let keypair = generate_keypair(rsa_bits, &mut rng).unwrap();
         let b = keypair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let message = b"Test message";
         let hash = Sha3_256::digest(message);
         let m = BigUint::from_bytes_be(&hash) % (BigUint::one() << b);
-        let signature = rsa_sign(&keypair, &m, b);
+        let signature = rsa_sign(&keypair, &m, b).unwrap();
         let wrong_message = b"Wrong message";
         let wrong_hash = Sha3_256::digest(wrong_message);
         let wrong_m = BigUint::from_bytes_be(&wrong_hash) % (BigUint::one() << b);
-        assert!(!rsa_verify(&keypair.public, &wrong_m, &signature, b));
+        assert!(!rsa_verify(&keypair.public, &wrong_m, &signature, b).unwrap());
     }
 
     #[test]
     fn test_g_inverse() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng); //鍵ペアを作成
+        let key_pair = generate_keypair(bits, &mut rng).unwrap(); //鍵ペアを作成
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // いくつかのランダムな値でテスト
@@ -164,7 +170,7 @@ mod tests {
     fn test_g_inverse_near_n() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // n - 1 でテスト
@@ -179,7 +185,7 @@ mod tests {
     fn test_g_inverse_multiple_of_n() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // 2*n でテスト
@@ -195,7 +201,7 @@ mod tests {
     fn test_g_success() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let x = rng.gen_biguint(b as u64);
 
@@ -214,7 +220,7 @@ mod tests {
     fn test_g_zero() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let x = BigUint::zero();
 
@@ -229,7 +235,7 @@ mod tests {
     fn test_g_inverse_success() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let y = rng.gen_biguint(b as u64);
 
@@ -248,7 +254,7 @@ mod tests {
     fn test_g_inverse_zero() {
         let mut rng = thread_rng();
         let bits = 512;
-        let key_pair = generate_keypair(bits, &mut rng);
+        let key_pair = generate_keypair(bits, &mut rng).unwrap();
         let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let y = BigUint::zero();
 
