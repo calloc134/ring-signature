@@ -213,6 +213,26 @@ cargo build --release
 
 ## 7. 使い方
 
+まず OpenSSL で鍵を生成します。
+
+```bash
+mkdir -p keys
+
+# 署名者の鍵ペアを生成 (秘密鍵と公開鍵)
+openssl genpkey -algorithm RSA -out keys/signer_private.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in keys/signer_private.pem -out keys/signer_public.pem
+
+# メンバー1の鍵ペアを生成 (コードでは公開鍵のみ使用)
+openssl genpkey -algorithm RSA -out keys/member1_private.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in keys/member1_private.pem -out keys/member1_public.pem
+
+# メンバー2の鍵ペアを生成 (コードでは公開鍵のみ使用)
+openssl genpkey -algorithm RSA -out keys/member2_private.pem -pkeyopt rsa_keygen_bits:2048
+openssl rsa -pubout -in keys/member2_private.pem -out keys/member2_public.pem
+```
+
+その後、実行します。
+
 ```bash
 # 実行
 cargo run
