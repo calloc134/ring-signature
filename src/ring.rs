@@ -195,29 +195,31 @@ mod tests {
         assert!(!ring_verify(&ring_pubs, &ring_sig, wrong_message, b)?);
         Ok(())
     }
-    // エラーハンドリングのテスト (空のリング)  -> panicするはず
+    // エラーハンドリングのテスト (空のリング)
     #[test]
-    #[should_panic]
     fn test_ring_sign_empty_ring() {
         let rsa_bits = 512;
         let ring: Vec<KeyPair> = Vec::new(); // 空のリング
         let b = rsa_bits + COMMON_DOMAIN_BIT_LENGTH_ADDITION; // 仮の b
         let message = b"Empty Ring Test";
-        let _ring_sig = ring_sign(
+        let result = ring_sign(
             &ring
                 .iter()
                 .map(|kp| kp.public.clone())
                 .collect::<Vec<PublicKey>>()
                 .as_slice(),
             0,
-            &ring[0].secret, // ここでパニック
+            &SecretKey {
+                d: BigUint::one(),
+                n: BigUint::one(),
+            }, // ダミー
             message,
             b,
         );
+        assert!(result.is_err(), "空のリングではErrを返すべき");
     }
 
     #[test]
-    #[should_panic]
     fn test_ring_sign_invalid_signer_index() {
         let mut rng = thread_rng();
         let rsa_bits = 512;
@@ -228,8 +230,7 @@ mod tests {
         let b = ring.iter().map(|kp| kp.public.n.bits()).max().unwrap() as usize
             + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let message = b"Ring Signature Test";
-        // 無効な署名者インデックス (リングサイズを超える)
-        let _ring_sig = ring_sign(
+        let result = ring_sign(
             &ring
                 .iter()
                 .map(|kp| kp.public.clone())
@@ -239,8 +240,8 @@ mod tests {
             &ring[0].secret,
             message,
             b,
-        )
-        .unwrap();
+        );
+        assert!(result.is_err(), "不正なインデックスではErrを返すべき");
     }
 
     #[test]

@@ -56,6 +56,8 @@ pub fn d_k(k: &BigUint, x: &BigUint, b: usize) -> BigUint {
     result
 }
 
+// e_k, d_kは現状失敗しない設計なのでpanicやResult型は不要。将来失敗しうる場合はResult型に変更すること。
+
 #[cfg(test)]
 mod tests {
     use super::*;
