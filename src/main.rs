@@ -16,7 +16,7 @@ use log::{debug, error, info};
 
 fn main() -> Result<()> {
     // ロガー初期化
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     // 鍵ファイルが格納されているディレクトリのパス設定
     let key_dir = Path::new("keys");
