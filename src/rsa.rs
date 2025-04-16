@@ -5,7 +5,7 @@ use log::{debug, info, trace};
 use num_bigint::BigUint;
 use num_integer::Integer;
 use num_prime::RandPrime;
-use num_traits::One;
+use num_traits::{One, Zero};
 use rand::Rng;
 
 // RSA公開鍵
@@ -31,6 +31,9 @@ pub struct KeyPair {
 
 /// 拡張RSAトラップドア関数 g
 pub fn g(pubkey: &PublicKey, x: &BigUint, _b: usize) -> BigUint {
+    // 内部不変条件: n > 0, e > 0
+    assert!(!pubkey.n.is_zero(), "RSA公開鍵nが0です");
+    assert!(!pubkey.e.is_zero(), "RSA公開鍵eが0です");
     trace!("g: pubkey = {:?}, x = {}, _b = {}", pubkey, x, _b);
     let (q, r) = x.div_rem(&pubkey.n);
     debug!("g: q = {}, r = {}", q, r);
@@ -43,6 +46,9 @@ pub fn g(pubkey: &PublicKey, x: &BigUint, _b: usize) -> BigUint {
 
 /// 拡張RSAトラップドア関数の逆関数 g⁻¹
 pub fn g_inverse(secret: &SecretKey, y: &BigUint, _b: usize) -> BigUint {
+    // 内部不変条件: n > 0, d > 0
+    assert!(!secret.n.is_zero(), "RSA秘密鍵nが0です");
+    assert!(!secret.d.is_zero(), "RSA秘密鍵dが0です");
     trace!("g_inverse: secret = {:?}, y = {}, _b = {}", secret, y, _b);
     let (q, r) = y.div_rem(&secret.n);
     debug!("g_inverse: q = {}, r = {}", q, r);
