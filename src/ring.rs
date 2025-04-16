@@ -1,5 +1,7 @@
 use crate::crypto_utils::{d_k, e_k};
+use crate::error::RingError;
 use crate::rsa::{g, g_inverse, PublicKey, SecretKey};
+use anyhow::Result;
 use log::{debug, error, info};
 use num_bigint::{BigUint, RandBigInt};
 use num_traits::Zero;
@@ -21,7 +23,7 @@ pub fn ring_sign(
     signer_secret: &SecretKey,
     m: &[u8],
     b: usize,
-) -> RingSignature {
+) -> Result<RingSignature> {
     info!(
         "リング署名生成開始: ring_size = {}, signer = {}, m = {:?}, b = {}",
         ring.len(),
@@ -32,7 +34,7 @@ pub fn ring_sign(
 
     if ring.is_empty() {
         error!("リングが空です。署名を生成できません。");
-        panic!("空のリングに対して署名が試みられました。");
+        return Err(RingError::EmptyRing.into());
     }
     if signer >= ring.len() {
         error!(
@@ -40,7 +42,7 @@ pub fn ring_sign(
             signer,
             ring.len()
         );
-        panic!("無効な署名者インデックスです。");
+        return Err(RingError::InvalidSignerIndex.into());
     }
 
     let mut rng = thread_rng();
@@ -92,11 +94,11 @@ pub fn ring_sign(
 
     let ring_signature = RingSignature { v, xs };
     info!("リング署名生成完了: ring_signature = {:?}", ring_signature);
-    ring_signature
+    Ok(ring_signature)
 }
 
 /// リング署名検証
-pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) -> bool {
+pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) -> Result<bool> {
     info!(
         "リング署名検証開始: ring_size = {}, sig = {:?}, m = {:?}, b = {}",
         ring.len(),
@@ -124,7 +126,7 @@ pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) 
 
     let verification = t == sig.v;
     info!("リング署名検証結果: {}", verification);
-    verification
+    Ok(verification)
 }
 
 #[cfg(test)]
@@ -138,12 +140,12 @@ mod tests {
     use rand::thread_rng;
 
     #[test]
-    fn test_ring_sign_success() {
+    fn test_ring_sign_success() -> Result<()> {
         let mut rng = thread_rng();
         let rsa_bits = 512;
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
-            ring.push(generate_keypair(rsa_bits, &mut rng));
+            ring.push(generate_keypair(rsa_bits, &mut rng)?);
         }
         let b = ring.iter().map(|kp| kp.public.n.bits()).max().unwrap() as usize
             + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
@@ -158,18 +160,19 @@ mod tests {
             &ring[0].secret,
             message,
             b,
-        );
+        )?;
         let ring_pubs: Vec<PublicKey> = ring.iter().map(|kp| kp.public.clone()).collect();
-        assert!(ring_verify(&ring_pubs, &ring_sig, message, b));
+        assert!(ring_verify(&ring_pubs, &ring_sig, message, b)?);
+        Ok(())
     }
 
     #[test]
-    fn test_ring_sign_fail() {
+    fn test_ring_sign_fail() -> Result<()> {
         let mut rng = thread_rng();
         let rsa_bits = 512;
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
-            ring.push(generate_keypair(rsa_bits, &mut rng));
+            ring.push(generate_keypair(rsa_bits, &mut rng)?);
         }
         let b = ring.iter().map(|kp| kp.public.n.bits()).max().unwrap() as usize
             + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
@@ -184,12 +187,13 @@ mod tests {
             &ring[0].secret,
             message,
             b,
-        );
+        )?;
         let ring_pubs: Vec<PublicKey> = ring.iter().map(|kp| kp.public.clone()).collect();
         let wrong_message = b"Wrong Ring Signature Test";
         let wrong_hash = Sha3_256::digest(wrong_message);
         let _wrong_m = BigUint::from_bytes_be(&wrong_hash) % (BigUint::one() << b);
-        assert!(!ring_verify(&ring_pubs, &ring_sig, wrong_message, b));
+        assert!(!ring_verify(&ring_pubs, &ring_sig, wrong_message, b)?);
+        Ok(())
     }
     // エラーハンドリングのテスト (空のリング)  -> panicするはず
     #[test]
@@ -209,7 +213,7 @@ mod tests {
             &ring[0].secret, // ここでパニック
             message,
             b,
-        ); // panic するはず
+        );
     }
 
     #[test]
@@ -219,7 +223,7 @@ mod tests {
         let rsa_bits = 512;
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..3 {
-            ring.push(generate_keypair(rsa_bits, &mut rng));
+            ring.push(generate_keypair(rsa_bits, &mut rng).unwrap());
         }
         let b = ring.iter().map(|kp| kp.public.n.bits()).max().unwrap() as usize
             + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
@@ -235,17 +239,18 @@ mod tests {
             &ring[0].secret,
             message,
             b,
-        );
+        )
+        .unwrap();
     }
 
     #[test]
-    fn test_ring_sign_various_signers() {
+    fn test_ring_sign_various_signers() -> Result<()> {
         let mut rng = thread_rng();
         let rsa_bits = 512;
         let ring_size = 5; // リングサイズを固定
         let mut ring: Vec<KeyPair> = Vec::new();
         for _ in 0..ring_size {
-            ring.push(generate_keypair(rsa_bits, &mut rng));
+            ring.push(generate_keypair(rsa_bits, &mut rng)?);
         }
         let b = ring.iter().map(|kp| kp.public.n.bits()).max().unwrap() as usize
             + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
@@ -260,12 +265,13 @@ mod tests {
                 &ring[signer_index].secret, // 正しい秘密鍵を使用
                 message,
                 b,
-            );
+            )?;
             assert!(
-                ring_verify(&ring_pubs, &ring_sig, message, b),
+                ring_verify(&ring_pubs, &ring_sig, message, b)?,
                 "Verification failed for signer {}",
                 signer_index
             );
         }
+        Ok(())
     }
 }
