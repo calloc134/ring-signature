@@ -1,6 +1,6 @@
 use crate::constants;
 use crate::error::RsaError;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::{debug, info, trace};
 use num_bigint::BigUint;
 use num_integer::Integer;
@@ -13,11 +13,17 @@ use rsa::{
     traits::{PrivateKeyParts, PublicKeyParts},
     RsaPrivateKey, RsaPublicKey,
 };
-use sequoia_openpgp::crypto::mpi::PublicKey as OpenPgpPublicKey;
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::{cert::Cert, policy::StandardPolicy};
-use std::fs::{self, File};
+use sequoia_openpgp::{
+    crypto::{mpi::PublicKey as OpenPgpPublicKey, Password},
+    packet::{key::SecretKeyMaterial, Key},
+};
 use std::io::Read;
+use std::{
+    fs::{self, File},
+    io::BufReader,
+};
 
 // RSA公開鍵を表す構造体
 #[derive(Clone, Debug)]
@@ -247,6 +253,54 @@ pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
     }
 }
 
+/// RSA鍵ペアをファイルから読み込む。パスワードが必要なら `Some(password)` を渡す。
+pub fn load_keypair(path: &str, password: Option<&str>) -> Result<KeyPair> {
+    // ファイル読み込み → Cert 構築
+    let reader = BufReader::new(File::open(path)?);
+    let cert = Cert::from_reader(reader)?;
+
+    // 秘密鍵を含む最初のキーを取得
+    let binding = cert
+        .keys()
+        .secret() // 秘密鍵のみフィルタ :contentReference[oaicite:13]{index=13}
+        .nth(0)
+        .ok_or_else(|| anyhow!("Secret key not found"))?;
+    let mut key = binding.key().clone();
+
+    // 暗号化されているなら復号
+    if key.has_secret() && !key.has_unencrypted_secret() {
+        let pw = Password::from(password.unwrap_or(""));
+        key = key.decrypt_secret(&pw)?; // :contentReference[oaicite:14]{index=14}
+    }
+
+    // SecretKeyMaterial から d, p, q を抽出
+    if let Key::V4(key4) = key {
+        if let SecretKeyMaterial::Unencrypted(m) = key4.secret() {
+            m.map(|f| {
+                if let sequoia_openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, .. } = f {
+                    // 各 MPI を BigUint に変換
+                    let d = BigUint::from_bytes_be(d.value()); // :contentReference[oaicite:15]{index=15}
+                    let p = BigUint::from_bytes_be(p.value()); // :contentReference[oaicite:16]{index=16}
+                    let q = BigUint::from_bytes_be(q.value()); // :contentReference[oaicite:17]{index=17}
+
+                    // n = p * q
+                    let n = &p * &q;
+
+                    // 公開指数は通常固定 (65537) だが、公開鍵 MPI から取得しても良い
+                    let public = PublicKey {
+                        n: n.clone(),
+                        e: BigUint::from(65537u32),
+                    };
+                    let secret = SecretKey { n, d };
+                }
+            })
+        } else {
+            return Err(anyhow!("Not an RSA key"));
+        }
+    }
+
+    Err(anyhow!("Not an RSA key"))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
