@@ -1,12 +1,12 @@
 use anyhow::Result;
 use num_traits::One;
 // 定数モジュールをインポート
-use ring_signature::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 // リング署名関連関数をインポート
-use ring_signature::ring::{ring_sign, ring_verify};
+use common::ring::{ring_sign, ring_verify};
 // RSA関連関数と構造体をインポート
-use ring_signature::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
-use ring_signature::rsa::{rsa_sign, rsa_verify};
+use common::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
+use common::rsa::{rsa_sign, rsa_verify};
 // ハッシュ関数 (SHA3-256)
 use sha3::Digest;
 // パス操作用
