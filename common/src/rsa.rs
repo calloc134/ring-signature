@@ -14,6 +14,7 @@ use rsa::{
     RsaPrivateKey, RsaPublicKey,
 };
 // ファイル読み込み用
+use pgp::{types::PublicKeyAlgorithm, SignedSecretKey, TPK};
 use std::fs;
 
 // RSA公開鍵を表す構造体
@@ -175,7 +176,29 @@ pub fn load_public_key_from_pem(filepath: &str) -> Result<PublicKey> {
     info!("Loading public key from PEM: {}", filepath);
     // PEMファイルを文字列として読み込む
     let pem_str = fs::read_to_string(filepath)?;
-    // SPKI形式のPEM文字列から RsaPublicKey をデコード
+    // PGP‐armored public key?
+    if pem_str.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+        // parse transferable public key
+        let tpk = TPK::from_armor_single(pem_str.as_bytes())
+            .map_err(|e| RsaError::Other(format!("PGP parse error: {}", e)))?;
+        // find an RSA primary or subkey
+        let key = tpk
+            .keys()
+            .find(|k| {
+                matches!(
+                    k.key().algorithm(),
+                    PublicKeyAlgorithm::RSAEncryptSign { .. }
+                )
+            })
+            .ok_or_else(|| RsaError::Other("no RSA key in PGP block".into()))?;
+        if let PublicKeyAlgorithm::RSAEncryptSign { ref n, ref e } = key.key().algorithm() {
+            let n = BigUint::from_bytes_be(n);
+            let e = BigUint::from_bytes_be(e);
+            return Ok(PublicKey { n, e });
+        }
+        unreachable!()
+    }
+    // existing PEM/SPKI path
     let rsa_pub_key = RsaPublicKey::from_public_key_pem(&pem_str)
         .map_err(|e| RsaError::Other(format!("Failed to parse public key PEM: {}", e)))?;
 
@@ -197,7 +220,21 @@ pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
     info!("Loading secret key from PEM: {}", filepath);
     // PEMファイルを文字列として読み込む
     let pem_str = fs::read_to_string(filepath)?;
-    // PKCS#8形式のPEM文字列から RsaPrivateKey をデコード
+    // PGP‐armored private key?
+    if pem_str.contains("-----BEGIN PGP PRIVATE KEY BLOCK-----") {
+        // parse signed secret key
+        let ssk = SignedSecretKey::from_armor_single(pem_str.as_bytes())
+            .map_err(|e| RsaError::Other(format!("PGP secret parse error: {}", e)))?;
+        let sk = ssk.secret_params();
+        if let PublicKeyAlgorithm::RSAEncryptSign { ref n, ref e } = sk.pk.algorithm() {
+            let n = BigUint::from_bytes_be(n);
+            // private exponent from secret_params
+            let d = BigUint::from_bytes_be(&sk.key.d().to_bytes_be());
+            return Ok(SecretKey { d, n });
+        }
+        return Err(RsaError::Other("PGP key is not RSA".into()).into());
+    }
+    // existing PEM/PKCS#8 path
     let rsa_priv_key = RsaPrivateKey::from_pkcs8_pem(&pem_str)
         .map_err(|e| RsaError::Other(format!("Failed to parse private key PEM (PKCS#8): {}", e)))?;
 
