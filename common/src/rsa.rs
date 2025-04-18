@@ -13,8 +13,11 @@ use rsa::{
     traits::{PrivateKeyParts, PublicKeyParts},
     RsaPrivateKey, RsaPublicKey,
 };
-// ファイル読み込み用
-use std::fs;
+use sequoia_openpgp::crypto::mpi::PublicKey as OpenPgpPublicKey;
+use sequoia_openpgp::parse::Parse;
+use sequoia_openpgp::{cert::Cert, policy::StandardPolicy};
+use std::fs::{self, File};
+use std::io::Read;
 
 // RSA公開鍵を表す構造体
 #[derive(Clone, Debug)]
@@ -207,6 +210,41 @@ pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
     info!("Secret key loaded successfully: n bits = {}", n.bits());
     // SecretKey 構造体を作成して返す
     Ok(SecretKey { d, n })
+}
+
+pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
+    // Read the PGP certificate file
+    let mut file = File::open(filepath)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+
+    // Parse the certificate
+    let cert = Cert::from_bytes(&buf)?;
+
+    // Define the policy
+    let policy = &StandardPolicy::new();
+
+    // Iterate over the keys in the certificate
+    let key = cert
+        .keys()
+        .with_policy(policy, None)
+        .alive()
+        .for_signing() // Filter for signing-capable keys
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No valid signing-capable public key found"))?;
+
+    // Extract the key material
+    let key = key.key();
+
+    // Match on the key material to extract RSA parameters
+    if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+        Ok(PublicKey {
+            n: BigUint::from_bytes_be(n.value()),
+            e: BigUint::from_bytes_be(e.value()),
+        })
+    } else {
+        Err(anyhow::anyhow!("Not an RSA public key"))
+    }
 }
 
 #[cfg(test)]
