@@ -1,12 +1,12 @@
 use anyhow::Result;
 use num_traits::One;
 // 定数モジュールをインポート
-use ring_signature::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 // リング署名関連関数をインポート
-use ring_signature::ring::{ring_sign, ring_verify};
+use common::ring::{ring_sign, ring_verify};
 // RSA関連関数と構造体をインポート
-use ring_signature::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
-use ring_signature::rsa::{rsa_sign, rsa_verify};
+use common::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
+use common::rsa::{rsa_sign, rsa_verify};
 // ハッシュ関数 (SHA3-256)
 use sha3::Digest;
 // パス操作用
@@ -20,19 +20,18 @@ fn main() -> Result<()> {
 
     // 鍵ファイルが格納されているディレクトリのパス設定
     let key_dir = Path::new("keys");
-    // 各鍵ファイルのパス設定 (.asc PGP 鍵を読み込み)
-    let signer_priv_key_path = key_dir.join("signer_private.asc"); // PGP秘密鍵
-    let signer_pub_key_path = key_dir.join("signer_public.asc"); // PGP公開鍵
-    let member1_pub_key_path = key_dir.join("member1_public.asc");
-    let member2_pub_key_path = key_dir.join("member2_public.asc");
+    // 各鍵ファイルのパス設定
+    let signer_priv_key_path = key_dir.join("signer_private.pem");
+    let signer_pub_key_path = key_dir.join("signer_public.pem");
+    let member1_pub_key_path = key_dir.join("member1_public.pem");
+    let member2_pub_key_path = key_dir.join("member2_public.pem");
 
     // --- 鍵の読み込み ---
-    info!("PGP鍵ファイルから鍵を読み込み中...");
-    // PGP鍵ブロックは load_* 関数内で検出して処理される
+    info!("PEMファイルから鍵を読み込み中...");
+    // 署名者の秘密鍵を読み込み
     let signer_secret_key = load_secret_key_from_pem(signer_priv_key_path.to_str().unwrap())?;
     // 署名者の公開鍵を読み込み
     let signer_public_key = load_public_key_from_pem(signer_pub_key_path.to_str().unwrap())?;
-
     // 他のリングメンバーの公開鍵を読み込み
     let member1_public_key = load_public_key_from_pem(member1_pub_key_path.to_str().unwrap())?;
     let member2_public_key = load_public_key_from_pem(member2_pub_key_path.to_str().unwrap())?;
