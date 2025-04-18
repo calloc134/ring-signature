@@ -20,18 +20,19 @@ fn main() -> Result<()> {
 
     // 鍵ファイルが格納されているディレクトリのパス設定
     let key_dir = Path::new("keys");
-    // 各鍵ファイルのパス設定
-    let signer_priv_key_path = key_dir.join("signer_private.pem");
-    let signer_pub_key_path = key_dir.join("signer_public.pem");
-    let member1_pub_key_path = key_dir.join("member1_public.pem");
-    let member2_pub_key_path = key_dir.join("member2_public.pem");
+    // 各鍵ファイルのパス設定 (.asc PGP 鍵を読み込み)
+    let signer_priv_key_path = key_dir.join("signer_private.asc"); // PGP秘密鍵
+    let signer_pub_key_path = key_dir.join("signer_public.asc"); // PGP公開鍵
+    let member1_pub_key_path = key_dir.join("member1_public.asc");
+    let member2_pub_key_path = key_dir.join("member2_public.asc");
 
     // --- 鍵の読み込み ---
-    info!("PEMファイルから鍵を読み込み中...");
-    // 署名者の秘密鍵を読み込み
+    info!("PGP鍵ファイルから鍵を読み込み中...");
+    // PGP鍵ブロックは load_* 関数内で検出して処理される
     let signer_secret_key = load_secret_key_from_pem(signer_priv_key_path.to_str().unwrap())?;
     // 署名者の公開鍵を読み込み
     let signer_public_key = load_public_key_from_pem(signer_pub_key_path.to_str().unwrap())?;
+
     // 他のリングメンバーの公開鍵を読み込み
     let member1_public_key = load_public_key_from_pem(member1_pub_key_path.to_str().unwrap())?;
     let member2_public_key = load_public_key_from_pem(member2_pub_key_path.to_str().unwrap())?;
