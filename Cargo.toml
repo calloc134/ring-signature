@@ -4,3 +4,4 @@ members = [
     "server",
     "client-wasm",
 ]
+resolver = "2" 
