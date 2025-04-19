@@ -260,6 +260,11 @@ cargo run
 
 # テスト
 
+できるだけ単体テストを実装しています。
+テストは以下のコマンドで実行できます。
+
+```bash
+
 cargo test
 
 ```
@@ -275,4 +280,3 @@ cargo test
 ## 10. 参考文献
 
 - Rivest, R. L., Shamir, A., & Tauman, Y. (2001). How to leak a secret. In _Advances in Cryptology—ASIACRYPT 2001_ (pp. 552-565). Springer Berlin Heidelberg. ([https://www.iacr.org/archive/asiacrypt2001/22480554.pdf](https://www.iacr.org/archive/asiacrypt2001/22480554.pdf))
-```
