@@ -6,35 +6,109 @@ use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 // リング署名関連関数をインポート
 use common::ring::{ring_sign, ring_verify};
 // RSA関連関数と構造体をインポート
-use common::rsa::{load_keypair_from_pgp, load_public_key_from_pgp, rsa_sign, rsa_verify};
+use common::rsa::{
+    load_keypair_from_pgp, load_public_key_from_pem, load_public_key_from_pgp,
+    load_secret_key_from_pem, rsa_sign, rsa_verify,
+};
 // ハッシュ関数 (SHA3-256)
 use sha3::Digest;
 // パス操作用
-use std::path::Path;
 // ログ出力用
 use log::{debug, error, info};
+// dialoguer をインポート
+use dialoguer::{Input, Password, Select};
 
 fn main() -> Result<()> {
     // ロガー初期化
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    // 鍵ファイルが格納されているディレクトリのパス設定
-    let key_dir = Path::new("keys");
-    // 各鍵ファイルのパス設定
-    let signer_priv_key_path = key_dir.join("signer_private.asc");
-    let member1_pub_key_path = key_dir.join("member1_public.asc");
-    let member2_pub_key_path = key_dir.join("member2_public.asc");
+    // 鍵ファイル形式を選択
+    let formats = &["pem", "asc"];
+    let fmt_idx = Select::new()
+        .with_prompt("鍵ファイル形式を選択")
+        .items(formats)
+        .default(0)
+        .interact()?;
+    let fmt = formats[fmt_idx];
+
+    // 署名者秘密鍵ファイルパス入力
+    let signer_priv_path: String = Input::<String>::new()
+        .with_prompt("署名者秘密鍵ファイルパス")
+        .default(
+            match fmt {
+                "pem" => "keys/signer_private.pem",
+                _ => "keys/signer_private.asc",
+            }
+            .to_string(),
+        )
+        .interact_text()?;
+
+    // PEMの場合は公開鍵ファイルパスも入力
+    let signer_pub_path = if fmt == "pem" {
+        Some(
+            Input::<String>::new()
+                .with_prompt("署名者公開鍵ファイルパス")
+                .default("keys/signer_public.pem".to_string())
+                .interact_text()?,
+        )
+    } else {
+        None
+    };
+
+    // ASCの場合はパスワード入力
+    let password = if fmt == "asc" {
+        Some(
+            Password::new()
+                .with_prompt("秘密鍵パスワード")
+                .allow_empty_password(false)
+                .interact()?,
+        )
+    } else {
+        None
+    };
+
+    // メンバー公開鍵ファイルパス入力
+    let member1_pub_path: String = Input::<String>::new()
+        .with_prompt("メンバー1 公開鍵ファイルパス")
+        .default(
+            match fmt {
+                "pem" => "keys/member1_public.pem",
+                _ => "keys/member1_public.asc",
+            }
+            .to_string(),
+        )
+        .interact_text()?;
+    let member2_pub_path: String = Input::<String>::new()
+        .with_prompt("メンバー2 公開鍵ファイルパス")
+        .default(
+            match fmt {
+                "pem" => "keys/member2_public.pem",
+                _ => "keys/member2_public.asc",
+            }
+            .to_string(),
+        )
+        .interact_text()?;
 
     // --- 鍵の読み込み ---
     info!("PGP証明書から鍵を読み込み中...");
-    // PGP秘密鍵（.asc）から鍵ペアを取得
-    let signer_keypair =
-        load_keypair_from_pgp(signer_priv_key_path.to_str().unwrap(), Some("password"))?;
-    let signer_public_key = signer_keypair.public.clone();
-    let signer_secret_key = signer_keypair.secret.clone();
-    // 他のリングメンバーの公開鍵を読み込み
-    let member1_public_key = load_public_key_from_pgp(member1_pub_key_path.to_str().unwrap())?;
-    let member2_public_key = load_public_key_from_pgp(member2_pub_key_path.to_str().unwrap())?;
+    let (signer_public_key, signer_secret_key) = if fmt == "pem" {
+        let secret = load_secret_key_from_pem(&signer_priv_path)?;
+        let public = load_public_key_from_pem(signer_pub_path.as_ref().unwrap())?;
+        (public, secret)
+    } else {
+        let kp = load_keypair_from_pgp(&signer_priv_path, password.as_deref())?;
+        (kp.public.clone(), kp.secret)
+    };
+    let member1_public_key = if fmt == "pem" {
+        load_public_key_from_pem(&member1_pub_path)?
+    } else {
+        load_public_key_from_pgp(&member1_pub_path)?
+    };
+    let member2_public_key = if fmt == "pem" {
+        load_public_key_from_pem(&member2_pub_path)?
+    } else {
+        load_public_key_from_pgp(&member2_pub_path)?
+    };
 
     // リングメンバーの公開鍵リストを作成 (署名者の公開鍵を含む)
     let ring_pubs: Vec<PublicKey> = vec![
