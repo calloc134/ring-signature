@@ -1,6 +1,6 @@
 use crate::constants;
 use crate::error::RsaError;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use log::{debug, info, trace};
 use num_bigint::BigUint;
 use num_integer::Integer;
@@ -14,13 +14,13 @@ use rsa::{
     RsaPrivateKey, RsaPublicKey,
 };
 use sequoia_openpgp::parse::Parse;
-use sequoia_openpgp::{cert::Cert, policy::StandardPolicy};
+use sequoia_openpgp::policy::StandardPolicy;
 use sequoia_openpgp::{
     crypto::{mpi::PublicKey as OpenPgpPublicKey, Password},
     packet::{key::SecretKeyMaterial, Key},
 };
 use std::{
-    fs::{self, File},
+    fs::{self},
     io::{BufReader, Cursor},
 };
 
