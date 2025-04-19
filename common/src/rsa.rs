@@ -226,8 +226,14 @@ fn load_cert_from_file(path: &str) -> Result<Cert> {
 }
 
 /// PGP証明書から RSA 公開鍵を抽出
-pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
-    let cert = load_cert_from_file(filepath)?;
+pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
+    // Map load_cert errors
+    let cert = load_cert_from_file(filepath).map_err(|e| {
+        RsaError::Other(format!(
+            "Failed to load PGP certificate '{}': {}",
+            filepath, e
+        ))
+    })?;
     let policy = &StandardPolicy::new();
 
     let key_packet = cert
@@ -236,7 +242,8 @@ pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
         .alive()
         .for_signing()
         .next()
-        .ok_or_else(|| anyhow!("No valid signing-capable public key found"))?
+        // Map missing key
+        .ok_or_else(|| RsaError::Other("No valid signing-capable public key found".to_string()))?
         .key();
 
     if let OpenPgpPublicKey::RSA { ref e, ref n } = key_packet.mpis() {
@@ -245,61 +252,62 @@ pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
             e: BigUint::from_bytes_be(e.value()),
         })
     } else {
-        Err(anyhow!("Not an RSA public key"))
+        // Map wrong‐type error
+        Err(RsaError::Other("Not an RSA public key".to_string()))
     }
 }
 
 /// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
 /// password が必要な場合は `Some("your password")` を渡す
-pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair> {
-    let cert = load_cert_from_file(path)?;
+pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair, RsaError> {
+    // Map load_cert errors
+    let cert = load_cert_from_file(path).map_err(|e| {
+        RsaError::Other(format!("Failed to load PGP certificate '{}': {}", path, e))
+    })?;
 
-    // 秘密鍵のみを含むキーを取得
     let key_binding = cert
         .keys()
         .secret()
         .next()
-        .ok_or_else(|| anyhow!("Secret key not found"))?;
+        // Map missing secret
+        .ok_or_else(|| RsaError::Other("Secret key not found".to_string()))?;
 
-    // キー本体をクローン
     let mut key = key_binding.key().clone();
 
-    // 暗号化されていれば復号
     if key.has_secret() && !key.has_unencrypted_secret() {
         let pw = Password::from(password.unwrap_or(""));
         key = key
             .decrypt_secret(&pw)
-            .map_err(|e| anyhow!("Failed to decrypt secret key: {}", e))?;
+            // Map decryption error
+            .map_err(|e| RsaError::Other(format!("Failed to decrypt secret key: {}", e)))?;
     }
 
-    // 4. V4鍵かつアンエンクリプト状態を map で処理
     if let Key::V4(key4) = key {
         if let SecretKeyMaterial::Unencrypted(m) = key4.secret() {
             let pair = m.map(|f| {
-                // f: &sequoia_openpgp::crypto::mpi::SecretKeyMaterial
                 if let sequoia_openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, .. } = f {
                     let d = BigUint::from_bytes_be(d.value());
                     let p = BigUint::from_bytes_be(p.value());
                     let q = BigUint::from_bytes_be(q.value());
                     let n = &p * &q;
-
-                    // 公開指数は固定 65537 とする
                     let public = PublicKey {
                         n: n.clone(),
                         e: BigUint::from(65537u32),
                     };
                     let secret = SecretKey { n, d };
-
                     KeyPair { public, secret }
                 } else {
-                    unreachable!("Unsupported non-RSA secret key material")
+                    unreachable!()
                 }
             });
             return Ok(pair);
         }
     }
 
-    Err(anyhow!("Not an RSA key or unsupported key version"))
+    // Map unsupported version
+    Err(RsaError::Other(
+        "Not an RSA key or unsupported key version".to_string(),
+    ))
 }
 
 #[cfg(test)]
