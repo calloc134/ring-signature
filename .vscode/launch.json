@@ -7,17 +7,17 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'ring-signature",
+      "name": "Debug executable 'common'",
       "cargo": {
         "args": [
           "build",
           "--manifest-path",
           "common/Cargo.toml",
-          "--bin=ring-signature",
-          "--package=ring-signature"
+          "--bin=common",
+          "--package=common"
         ],
         "filter": {
-          "name": "ring-signature",
+          "name": "common",
           "kind": "bin"
         }
       },
@@ -27,18 +27,18 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in executable 'ring-signature'",
+      "name": "Debug unit tests in executable 'common'",
       "cargo": {
         "args": [
           "test",
           "--no-run",
           "--manifest-path",
           "common/Cargo.toml",
-          "--bin=ring-signature",
-          "--package=ring-signature"
+          "--bin=common",
+          "--package=common"
         ],
         "filter": {
-          "name": "ring-signature",
+          "name": "common",
           "kind": "bin"
         }
       },
