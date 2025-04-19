@@ -251,7 +251,7 @@ pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
 
 /// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
 /// password が必要な場合は `Some("your password")` を渡す
-pub fn load_keypair(path: &str, password: Option<&str>) -> Result<KeyPair> {
+pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair> {
     let cert = load_cert_from_file(path)?;
 
     // 秘密鍵のみを含むキーを取得
