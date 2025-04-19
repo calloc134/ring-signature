@@ -1,12 +1,12 @@
 use anyhow::Result;
+use common::{KeyPair, PublicKey};
 use num_traits::One;
 // 定数モジュールをインポート
 use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 // リング署名関連関数をインポート
 use common::ring::{ring_sign, ring_verify};
 // RSA関連関数と構造体をインポート
-use common::rsa::{load_public_key_from_pem, load_secret_key_from_pem, KeyPair, PublicKey};
-use common::rsa::{rsa_sign, rsa_verify};
+use common::rsa::{load_keypair_from_pgp, load_public_key_from_pgp, rsa_sign, rsa_verify};
 // ハッシュ関数 (SHA3-256)
 use sha3::Digest;
 // パス操作用
@@ -21,20 +21,20 @@ fn main() -> Result<()> {
     // 鍵ファイルが格納されているディレクトリのパス設定
     let key_dir = Path::new("keys");
     // 各鍵ファイルのパス設定
-    let signer_priv_key_path = key_dir.join("signer_private.pem");
-    let signer_pub_key_path = key_dir.join("signer_public.pem");
-    let member1_pub_key_path = key_dir.join("member1_public.pem");
-    let member2_pub_key_path = key_dir.join("member2_public.pem");
+    let signer_priv_key_path = key_dir.join("signer_private.asc");
+    let member1_pub_key_path = key_dir.join("member1_public.asc");
+    let member2_pub_key_path = key_dir.join("member2_public.asc");
 
     // --- 鍵の読み込み ---
-    info!("PEMファイルから鍵を読み込み中...");
-    // 署名者の秘密鍵を読み込み
-    let signer_secret_key = load_secret_key_from_pem(signer_priv_key_path.to_str().unwrap())?;
-    // 署名者の公開鍵を読み込み
-    let signer_public_key = load_public_key_from_pem(signer_pub_key_path.to_str().unwrap())?;
+    info!("PGP証明書から鍵を読み込み中...");
+    // PGP秘密鍵（.asc）から鍵ペアを取得
+    let signer_keypair =
+        load_keypair_from_pgp(signer_priv_key_path.to_str().unwrap(), Some("password"))?;
+    let signer_public_key = signer_keypair.public.clone();
+    let signer_secret_key = signer_keypair.secret.clone();
     // 他のリングメンバーの公開鍵を読み込み
-    let member1_public_key = load_public_key_from_pem(member1_pub_key_path.to_str().unwrap())?;
-    let member2_public_key = load_public_key_from_pem(member2_pub_key_path.to_str().unwrap())?;
+    let member1_public_key = load_public_key_from_pgp(member1_pub_key_path.to_str().unwrap())?;
+    let member2_public_key = load_public_key_from_pgp(member2_pub_key_path.to_str().unwrap())?;
 
     // リングメンバーの公開鍵リストを作成 (署名者の公開鍵を含む)
     let ring_pubs: Vec<PublicKey> = vec![
@@ -59,7 +59,6 @@ fn main() -> Result<()> {
     // 署名者の公開鍵と秘密鍵のモジュラスが一致するか確認 (任意)
     if signer_public_key.n != signer_secret_key.n {
         error!("エラー: 署名者の公開鍵と秘密鍵のモジュラスが一致しません！");
-        // return Err(anyhow::anyhow!("Signer key mismatch"));
     }
 
     // 署名対象のメッセージ

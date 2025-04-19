@@ -4,7 +4,7 @@ pub mod error;
 pub mod ring;
 pub mod rsa;
 
-// Re-export for external use (PGP loaders instead of PEM)
+// Re-export for external use
 pub use constants::*;
 pub use crypto_utils::{d_k, e_k};
 pub use error::{RingError, RsaError};
