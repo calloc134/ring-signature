@@ -47,19 +47,16 @@ fn main() -> Result<()> {
 
     info!("鍵の読み込み完了。");
     // 読み込んだ鍵情報の一部を表示 (デバッグ用)
-    info!(
-        "署名者の公開鍵 n (先頭20文字): {}...",
-        &signer_public_key.n.to_string()[..20]
-    );
-    info!(
-        "署名者の秘密鍵 n (先頭20文字): {}...",
-        &signer_secret_key.n.to_string()[..20]
-    );
 
     // 署名者の公開鍵と秘密鍵のモジュラスが一致するか確認 (任意)
     if signer_public_key.n != signer_secret_key.n {
         error!("エラー: 署名者の公開鍵と秘密鍵のモジュラスが一致しません！");
     }
+
+    info!(
+        "署名者のモジュラス n (先頭20文字): {}...",
+        &signer_public_key.n.to_string()[..20]
+    );
 
     // 署名対象のメッセージ
     let message = b"Hello RSA and Ring Signature!";
