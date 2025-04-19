@@ -13,8 +13,16 @@ use rsa::{
     traits::{PrivateKeyParts, PublicKeyParts},
     RsaPrivateKey, RsaPublicKey,
 };
-// ファイル読み込み用
-use std::fs;
+use sequoia_openpgp::parse::Parse;
+use sequoia_openpgp::policy::StandardPolicy;
+use sequoia_openpgp::{
+    crypto::{mpi::PublicKey as OpenPgpPublicKey, Password},
+    packet::{key::SecretKeyMaterial, Key},
+};
+use std::{
+    fs::{self},
+    io::{BufReader, Cursor},
+};
 
 // RSA公開鍵を表す構造体
 #[derive(Clone, Debug)]
@@ -207,6 +215,90 @@ pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
     info!("Secret key loaded successfully: n bits = {}", n.bits());
     // SecretKey 構造体を作成して返す
     Ok(SecretKey { d, n })
+}
+
+// 新規: PGP文字列からRSA公開鍵を抽出
+pub fn load_public_key_from_pgp_str(armored: &str) -> Result<PublicKey, RsaError> {
+    let mut rdr = BufReader::new(Cursor::new(armored.as_bytes()));
+    let cert = sequoia_openpgp::Cert::from_reader(&mut rdr)
+        .map_err(|e| RsaError::Other(format!("Failed to parse PGP cert from text: {}", e)))?;
+    let policy = &StandardPolicy::new();
+    let key = cert
+        .keys()
+        .with_policy(policy, None)
+        .alive()
+        .for_signing()
+        .next()
+        .ok_or_else(|| RsaError::Other("No valid signing key".into()))?
+        .key();
+    if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+        Ok(PublicKey {
+            n: BigUint::from_bytes_be(n.value()),
+            e: BigUint::from_bytes_be(e.value()),
+        })
+    } else {
+        Err(RsaError::Other("Not an RSA public key".into()))
+    }
+}
+
+// 既存: ファイル版はテキストを読み込んで上記を呼び出し
+pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
+    let txt = fs::read_to_string(filepath)
+        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", filepath, e)))?;
+    load_public_key_from_pgp_str(&txt)
+}
+
+/// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
+/// password が必要な場合は `Some("your password")` を渡す
+pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair, RsaError> {
+    let txt = fs::read_to_string(path)
+        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", path, e)))?;
+    load_keypair_from_pgp_str(&txt, password)
+}
+
+// 新規: PGP文字列からRSA鍵ペアを抽出
+pub fn load_keypair_from_pgp_str(
+    armored: &str,
+    password: Option<&str>,
+) -> Result<KeyPair, RsaError> {
+    let mut rdr = BufReader::new(Cursor::new(armored.as_bytes()));
+    let cert = sequoia_openpgp::Cert::from_reader(&mut rdr)
+        .map_err(|e| RsaError::Other(format!("Failed to parse PGP cert from text: {}", e)))?;
+    let key_binding = cert
+        .keys()
+        .secret()
+        .next()
+        .ok_or_else(|| RsaError::Other("Secret key not found".into()))?;
+    let mut key = key_binding.key().clone();
+    if key.has_secret() && !key.has_unencrypted_secret() {
+        let pw = Password::from(password.unwrap_or(""));
+        key = key
+            .decrypt_secret(&pw)
+            .map_err(|e| RsaError::Other(format!("Failed to decrypt secret key: {}", e)))?;
+    }
+    if let Key::V4(k4) = key {
+        if let SecretKeyMaterial::Unencrypted(m) = k4.secret() {
+            let pair = m.map(|f| {
+                if let sequoia_openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, .. } = f {
+                    let d = BigUint::from_bytes_be(d.value());
+                    let p = BigUint::from_bytes_be(p.value());
+                    let q = BigUint::from_bytes_be(q.value());
+                    let n = &p * &q;
+                    KeyPair {
+                        public: PublicKey {
+                            n: n.clone(),
+                            e: BigUint::from(65537u32),
+                        },
+                        secret: SecretKey { n, d },
+                    }
+                } else {
+                    unreachable!()
+                }
+            });
+            return Ok(pair);
+        }
+    }
+    Err(RsaError::Other("Unsupported key version or not RSA".into()))
 }
 
 #[cfg(test)]

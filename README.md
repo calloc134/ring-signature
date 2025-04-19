@@ -213,32 +213,96 @@ cargo build --release
 
 ## 7. 使い方
 
-まず OpenSSL で鍵を生成します。
+このプログラムでは、PEM 形式・GPG 形式の両方に対応した鍵を使用できます。
+
+### 鍵の生成
+
+#### PEM 形式 (`*.pem`)
+
+PEM 形式の鍵は、以下のように生成できます。
 
 ```bash
-mkdir -p keys
-
-# 署名者の鍵ペアを生成 (秘密鍵と公開鍵)
-openssl genpkey -algorithm RSA -out keys/signer_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/signer_private.pem -out keys/signer_public.pem
-
-# メンバー1の鍵ペアを生成 (コードでは公開鍵のみ使用)
-openssl genpkey -algorithm RSA -out keys/member1_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/member1_private.pem -out keys/member1_public.pem
-
-# メンバー2の鍵ペアを生成 (コードでは公開鍵のみ使用)
-openssl genpkey -algorithm RSA -out keys/member2_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/member2_private.pem -out keys/member2_public.pem
+bash generate_pem_keys.sh
 ```
 
-その後、実行します。
+鍵生成の後、 `keys` ディレクトリに以下のファイルが生成されます。
+
+- `signer_private.pem`: 署名者の秘密鍵
+- `signer_public.pem`: 署名者の公開鍵
+- `member1_public.pem`: メンバー 1 の公開鍵
+- `member2_public.pem`: メンバー 2 の公開鍵
+
+#### PGP/GPG 形式 (`*.asc`)
+
+PGP/GPG 形式の鍵は、以下のように生成できます。
 
 ```bash
+bash generate_pgp_keys.sh
+```
+
+鍵生成の後、 `keys` ディレクトリに以下のファイルが生成されます。
+
+- `signer_private.asc`: 署名者の秘密鍵
+- `member1_public.asc`: メンバー 1 の公開鍵
+- `member2_public.asc`: メンバー 2 の公開鍵
+
 # 実行
+
+```bash
 cargo run
+```
+
+プロンプトで、どちらの鍵形式を使用するかを選択します。
+
+その後、鍵のファイルパス ( PGP/GPG 形式の場合は秘密鍵のパスフレーズも必要 ) を入力します。
+処理が開始され、リング署名が生成されます。
+その後、署名の検証が行われ、結果が表示されます。
+
+```
+鍵ファイル形式を選択: pem
+署名者秘密鍵ファイルパス: keys/signer_private.pem
+署名者公開鍵ファイルパス: keys/signer_public.pem
+メンバー1 公開鍵ファイルパス: keys/member1_public.pem
+メンバー2 公開鍵ファイルパス: keys/member2_public.pem
+[2025-04-19T13:12:28Z INFO  common] PGP証明書から鍵を読み込み中...
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading secret key from PEM: keys/signer_private.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Secret key loaded successfully: n bits = 4096
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/signer_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member1_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common] 鍵の読み込み完了。
+[2025-04-19T13:12:28Z INFO  common] 署名者のモジュラス n (先頭20文字): 69837846587028374360...
+[2025-04-19T13:12:28Z INFO  common] メッセージ: Hello RSA and Ring Signature!
+[2025-04-19T13:12:28Z INFO  common] RSAでメッセージに署名中...
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成開始: key.n bits = 4096, m bits = 256, b = 4256
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成完了: 4096 bits
+[2025-04-19T13:12:28Z INFO  common] RSA署名 (hex): aa5fb7...
+[2025-04-19T13:12:28Z INFO  common] RSA署名を検証中...
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証開始: pubkey.n bits = 4096, m bits = 256, signature bits = 4096, b = 4256
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証結果: true
+[2025-04-19T13:12:28Z INFO  common] 通常RSA署名検証結果: true
+[2025-04-19T13:12:28Z INFO  common] リング署名を生成中...
+[2025-04-19T13:12:28Z INFO  common::ring] リング署名生成開始: ring_size = 3, signer = 0, m_len = 29, b = 4256
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名生成完了: v bits = 4253, xs_len = 3
+[2025-04-19T13:12:29Z INFO  common] リング署名 グルー値 v (hex): 1e9d5f...
+[2025-04-19T13:12:29Z INFO  common] リング署名を検証中...
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証開始: ring_size = 3, sig.v bits = 4253, sig.xs_len = 3, m_len = 29, b = 4256
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証結果: true
+[2025-04-19T13:12:29Z INFO  common] リング署名検証結果: true
+```
 
 # テスト
+
+できるだけ単体テストを実装しています。
+テストは以下のコマンドで実行できます。
+
+```bash
+
 cargo test
+
 ```
 
 ## 8. 貢献
