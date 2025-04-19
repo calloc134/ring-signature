@@ -258,6 +258,42 @@ cargo run
 処理が開始され、リング署名が生成されます。
 その後、署名の検証が行われ、結果が表示されます。
 
+```
+鍵ファイル形式を選択: pem
+署名者秘密鍵ファイルパス: keys/signer_private.pem
+署名者公開鍵ファイルパス: keys/signer_public.pem
+メンバー1 公開鍵ファイルパス: keys/member1_public.pem
+メンバー2 公開鍵ファイルパス: keys/member2_public.pem
+[2025-04-19T13:12:28Z INFO  common] PGP証明書から鍵を読み込み中...
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading secret key from PEM: keys/signer_private.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Secret key loaded successfully: n bits = 4096
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/signer_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member1_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
+[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-19T13:12:28Z INFO  common] 鍵の読み込み完了。
+[2025-04-19T13:12:28Z INFO  common] 署名者のモジュラス n (先頭20文字): 69837846587028374360...
+[2025-04-19T13:12:28Z INFO  common] メッセージ: Hello RSA and Ring Signature!
+[2025-04-19T13:12:28Z INFO  common] RSAでメッセージに署名中...
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成開始: key.n bits = 4096, m bits = 256, b = 4256
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成完了: 4096 bits
+[2025-04-19T13:12:28Z INFO  common] RSA署名 (hex): aa5fb7...
+[2025-04-19T13:12:28Z INFO  common] RSA署名を検証中...
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証開始: pubkey.n bits = 4096, m bits = 256, signature bits = 4096, b = 4256
+[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証結果: true
+[2025-04-19T13:12:28Z INFO  common] 通常RSA署名検証結果: true
+[2025-04-19T13:12:28Z INFO  common] リング署名を生成中...
+[2025-04-19T13:12:28Z INFO  common::ring] リング署名生成開始: ring_size = 3, signer = 0, m_len = 29, b = 4256
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名生成完了: v bits = 4253, xs_len = 3
+[2025-04-19T13:12:29Z INFO  common] リング署名 グルー値 v (hex): 1e9d5f...
+[2025-04-19T13:12:29Z INFO  common] リング署名を検証中...
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証開始: ring_size = 3, sig.v bits = 4253, sig.xs_len = 3, m_len = 29, b = 4256
+[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証結果: true
+[2025-04-19T13:12:29Z INFO  common] リング署名検証結果: true
+```
+
 # テスト
 
 できるだけ単体テストを実装しています。
