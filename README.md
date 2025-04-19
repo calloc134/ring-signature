@@ -213,32 +213,55 @@ cargo build --release
 
 ## 7. 使い方
 
-まず OpenSSL で鍵を生成します。
+このプログラムでは、PEM 形式・GPG 形式の両方に対応した鍵を使用できます。
+
+### 鍵の生成
+
+#### PEM 形式 (`*.pem`)
+
+PEM 形式の鍵は、以下のように生成できます。
 
 ```bash
-mkdir -p keys
-
-# 署名者の鍵ペアを生成 (秘密鍵と公開鍵)
-openssl genpkey -algorithm RSA -out keys/signer_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/signer_private.pem -out keys/signer_public.pem
-
-# メンバー1の鍵ペアを生成 (コードでは公開鍵のみ使用)
-openssl genpkey -algorithm RSA -out keys/member1_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/member1_private.pem -out keys/member1_public.pem
-
-# メンバー2の鍵ペアを生成 (コードでは公開鍵のみ使用)
-openssl genpkey -algorithm RSA -out keys/member2_private.pem -pkeyopt rsa_keygen_bits:2048
-openssl rsa -pubout -in keys/member2_private.pem -out keys/member2_public.pem
+bash generate_pem_keys.sh
 ```
 
-その後、実行します。
+鍵生成の後、 `keys` ディレクトリに以下のファイルが生成されます。
+
+- `signer_private.pem`: 署名者の秘密鍵
+- `signer_public.pem`: 署名者の公開鍵
+- `member1_public.pem`: メンバー 1 の公開鍵
+- `member2_public.pem`: メンバー 2 の公開鍵
+
+#### PGP/GPG 形式 (`*.asc`)
+
+PGP/GPG 形式の鍵は、以下のように生成できます。
 
 ```bash
+bash generate_pgp_keys.sh
+```
+
+鍵生成の後、 `keys` ディレクトリに以下のファイルが生成されます。
+
+- `signer_private.asc`: 署名者の秘密鍵
+- `member1_public.asc`: メンバー 1 の公開鍵
+- `member2_public.asc`: メンバー 2 の公開鍵
+
 # 実行
+
+```bash
 cargo run
+```
+
+プロンプトで、どちらの鍵形式を使用するかを選択します。
+
+その後、鍵のファイルパス ( PGP/GPG 形式の場合は秘密鍵のパスフレーズも必要 ) を入力します。
+処理が開始され、リング署名が生成されます。
+その後、署名の検証が行われ、結果が表示されます。
 
 # テスト
+
 cargo test
+
 ```
 
 ## 8. 貢献
@@ -252,3 +275,4 @@ cargo test
 ## 10. 参考文献
 
 - Rivest, R. L., Shamir, A., & Tauman, Y. (2001). How to leak a secret. In _Advances in Cryptology—ASIACRYPT 2001_ (pp. 552-565). Springer Berlin Heidelberg. ([https://www.iacr.org/archive/asiacrypt2001/22480554.pdf](https://www.iacr.org/archive/asiacrypt2001/22480554.pdf))
+```
