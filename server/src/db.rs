@@ -24,24 +24,29 @@ pub async fn insert_signature(
     req: CreateSignatureRequest,
 ) -> Result<Uuid, sqlx::Error> {
     let mut tx = pool.begin().await?;
+
     let row = sqlx::query!(
         r#"INSERT INTO signatures (v) VALUES ($1) RETURNING id"#,
         req.v,
     )
-    .fetch_one(&mut tx)
+    .fetch_one(&mut *tx)
     .await?;
     let sig_id = row.id;
+
     for (idx, (user, x)) in req.members.iter().zip(req.xs.iter()).enumerate() {
         sqlx::query!(
-            r#"INSERT INTO signature_members (signature_id, position, member_username, x_value) VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO signature_members
+               (signature_id, position, member_username, x_value)
+               VALUES ($1, $2, $3, $4)"#,
             sig_id,
             idx as i32,
             user,
             x,
         )
-        .execute(&mut tx)
+        .execute(&mut *tx)
         .await?;
     }
+
     tx.commit().await?;
     Ok(sig_id)
 }
