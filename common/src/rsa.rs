@@ -19,7 +19,6 @@ use sequoia_openpgp::{
     crypto::{mpi::PublicKey as OpenPgpPublicKey, Password},
     packet::{key::SecretKeyMaterial, Key},
 };
-use std::io::Read;
 use std::{
     fs::{self, File},
     io::BufReader,
@@ -217,90 +216,92 @@ pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
     // SecretKey 構造体を作成して返す
     Ok(SecretKey { d, n })
 }
+/// ファイルから Cert を読み込む共通処理
+fn load_cert_from_file(path: &str) -> Result<Cert> {
+    let file = File::open(path).map_err(|e| anyhow!("Failed to open file '{}': {}", path, e))?;
+    let mut buf_reader = BufReader::new(file);
+    // いずれかでパースできるように from_reader を利用
+    Cert::from_reader(&mut buf_reader)
+        .map_err(|e| anyhow!("Failed to parse PGP certificate '{}': {}", path, e))
+}
 
+/// PGP証明書から RSA 公開鍵を抽出
 pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey> {
-    // Read the PGP certificate file
-    let mut file = File::open(filepath)?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf)?;
-
-    // Parse the certificate
-    let cert = Cert::from_bytes(&buf)?;
-
-    // Define the policy
+    let cert = load_cert_from_file(filepath)?;
     let policy = &StandardPolicy::new();
 
-    // Iterate over the keys in the certificate
-    let key = cert
+    let key_packet = cert
         .keys()
         .with_policy(policy, None)
         .alive()
-        .for_signing() // Filter for signing-capable keys
+        .for_signing()
         .next()
-        .ok_or_else(|| anyhow::anyhow!("No valid signing-capable public key found"))?;
+        .ok_or_else(|| anyhow!("No valid signing-capable public key found"))?
+        .key();
 
-    // Extract the key material
-    let key = key.key();
-
-    // Match on the key material to extract RSA parameters
-    if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+    if let OpenPgpPublicKey::RSA { ref e, ref n } = key_packet.mpis() {
         Ok(PublicKey {
             n: BigUint::from_bytes_be(n.value()),
             e: BigUint::from_bytes_be(e.value()),
         })
     } else {
-        Err(anyhow::anyhow!("Not an RSA public key"))
+        Err(anyhow!("Not an RSA public key"))
     }
 }
 
-/// RSA鍵ペアをファイルから読み込む。パスワードが必要なら `Some(password)` を渡す。
+/// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
+/// password が必要な場合は `Some("your password")` を渡す
 pub fn load_keypair(path: &str, password: Option<&str>) -> Result<KeyPair> {
-    // ファイル読み込み → Cert 構築
-    let reader = BufReader::new(File::open(path)?);
-    let cert = Cert::from_reader(reader)?;
+    let cert = load_cert_from_file(path)?;
 
-    // 秘密鍵を含む最初のキーを取得
-    let binding = cert
+    // 秘密鍵のみを含むキーを取得
+    let key_binding = cert
         .keys()
-        .secret() // 秘密鍵のみフィルタ :contentReference[oaicite:13]{index=13}
-        .nth(0)
+        .secret()
+        .next()
         .ok_or_else(|| anyhow!("Secret key not found"))?;
-    let mut key = binding.key().clone();
 
-    // 暗号化されているなら復号
+    // キー本体をクローン
+    let mut key = key_binding.key().clone();
+
+    // 暗号化されていれば復号
     if key.has_secret() && !key.has_unencrypted_secret() {
         let pw = Password::from(password.unwrap_or(""));
-        key = key.decrypt_secret(&pw)?; // :contentReference[oaicite:14]{index=14}
+        key = key
+            .decrypt_secret(&pw)
+            .map_err(|e| anyhow!("Failed to decrypt secret key: {}", e))?;
     }
 
-    // SecretKeyMaterial から d, p, q を抽出
+    // 4. V4鍵かつアンエンクリプト状態を map で処理
     if let Key::V4(key4) = key {
         if let SecretKeyMaterial::Unencrypted(m) = key4.secret() {
-            m.map(|f| {
+            let pair = m.map(|f| {
+                // f: &sequoia_openpgp::crypto::mpi::SecretKeyMaterial
                 if let sequoia_openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, .. } = f {
-                    // 各 MPI を BigUint に変換
-                    let d = BigUint::from_bytes_be(d.value()); // :contentReference[oaicite:15]{index=15}
-                    let p = BigUint::from_bytes_be(p.value()); // :contentReference[oaicite:16]{index=16}
-                    let q = BigUint::from_bytes_be(q.value()); // :contentReference[oaicite:17]{index=17}
-
-                    // n = p * q
+                    let d = BigUint::from_bytes_be(d.value());
+                    let p = BigUint::from_bytes_be(p.value());
+                    let q = BigUint::from_bytes_be(q.value());
                     let n = &p * &q;
 
-                    // 公開指数は通常固定 (65537) だが、公開鍵 MPI から取得しても良い
+                    // 公開指数は固定 65537 とする
                     let public = PublicKey {
                         n: n.clone(),
                         e: BigUint::from(65537u32),
                     };
                     let secret = SecretKey { n, d };
+
+                    KeyPair { public, secret }
+                } else {
+                    unreachable!("Unsupported non-RSA secret key material")
                 }
-            })
-        } else {
-            return Err(anyhow!("Not an RSA key"));
+            });
+            return Ok(pair);
         }
     }
 
-    Err(anyhow!("Not an RSA key"))
+    Err(anyhow!("Not an RSA key or unsupported key version"))
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
