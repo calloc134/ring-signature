@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS signatures (
 
 -- Table to store each member's contribution (x_i) and order for each signature
 CREATE TABLE IF NOT EXISTS signature_members (
-    signature_id INTEGER NOT NULL REFERENCES signatures(id) ON DELETE CASCADE,
+    signature_id UUID NOT NULL REFERENCES signatures(id) ON DELETE CASCADE,
     position INTEGER NOT NULL,
     member_username TEXT NOT NULL,
     x_value TEXT NOT NULL,
