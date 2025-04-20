@@ -22,6 +22,7 @@ async fn create_signature(
         v: payload.v,
         xs: payload.xs,
         members: payload.members,
+        message: payload.message,
     };
     match insert_signature(&pool, req).await {
         Ok(id) => Ok(Json(CreateSignatureResponse { id })),
@@ -40,6 +41,7 @@ async fn fetch_signatures(
                 .map(|r| SignatureRecordDto {
                     id: r.id,
                     v: r.v,
+                    message: r.message,
                     xs: r.xs,
                     members: r.members,
                     created_at: r.created_at,

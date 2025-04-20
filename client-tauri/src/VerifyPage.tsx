@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface SignatureRecord {
   id: string;
+  message: string;
   v: string;
   xs: string[];
   members: string[];
@@ -12,7 +13,7 @@ interface SignatureRecord {
 
 const VerifyPage: React.FC = () => {
   const [username, setUsername] = useState<string>("");
-  const [message, setMessage] = useState<string>("");
+  // message is provided by each signature record
   const [records, setRecords] = useState<SignatureRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState<boolean>(false);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
@@ -35,7 +36,6 @@ const VerifyPage: React.FC = () => {
   };
 
   const handleVerify = async (rec: SignatureRecord) => {
-    if (!message) return toast.error("Message cannot be empty");
     setVerifying((prev) => ({ ...prev, [rec.id]: true }));
     try {
       const resp = await fetch(
@@ -46,7 +46,7 @@ const VerifyPage: React.FC = () => {
       const ok = await invoke("ring_verify", {
         pubkeys,
         signature: { v: rec.v, xs: rec.xs },
-        message,
+        message: rec.message,
       });
       const verified = ok as boolean;
       setResults((prev) => ({ ...prev, [rec.id]: verified }));
@@ -77,21 +77,15 @@ const VerifyPage: React.FC = () => {
           {loadingRecords ? "Loading..." : "Fetch Signatures"}
         </button>
       </div>
-      <div>
-        <label className="block font-medium">Message</label>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          className="mt-1 w-full border rounded px-2 py-1"
-          rows={2}
-        />
-      </div>
       <div className="space-y-2 max-h-96 overflow-auto">
         {records.map((rec) => (
           <div
             key={rec.id}
             className="flex justify-between items-center border p-2 rounded"
           >
+            <div className="flex-1">
+              <div className="text-sm font-medium">Message: {rec.message}</div>
+            </div>
             <div>
               <div className="text-sm text-gray-700">
                 v: {rec.v.slice(0, 10)}...

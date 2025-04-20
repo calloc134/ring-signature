@@ -40,11 +40,12 @@ const SignPage: React.FC = () => {
         password: password || null,
         message,
       });
+      console.log("Signature:", sig);
       const { v, xs } = sig as { v: string; xs: string[] };
       const postRes = await fetch("http://localhost:8080/signatures", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ v, xs, members: names }),
+        body: JSON.stringify({ v, xs, members: names, message }),
       });
       if (!postRes.ok) throw new Error("Failed to send signature");
       toast.success("Signature generated and sent");

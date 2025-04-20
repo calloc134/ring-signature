@@ -1,0 +1,2 @@
+ALTER TABLE signatures
+    ADD COLUMN IF NOT EXISTS message TEXT NOT NULL;
