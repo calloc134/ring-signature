@@ -3,5 +3,6 @@ members = [
     "common",
     "server",
     "client-wasm",
+    "client-tauri/src-tauri",
 ]
 resolver = "2" 
