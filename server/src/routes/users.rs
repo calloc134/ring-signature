@@ -30,8 +30,8 @@ async fn fetch_keybase_key(name: &str) -> Result<Option<PublicKeyDto>, (StatusCo
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
     match load_public_key_from_pgp_str(&text) {
         Ok(key) => Ok(Some(PublicKeyDto {
-            n: key.n.to_string(),
-            e: key.e.to_string(),
+            n: key.n.to_str_radix(16),
+            e: key.e.to_str_radix(16),
         })),
         Err(e) if e.to_string().contains("No valid signing key") => Ok(None),
         Err(e) => Err((StatusCode::BAD_REQUEST, e.to_string())),

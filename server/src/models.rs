@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// PublicKey DTO with numeric fields as decimal strings
+/// PublicKey DTO with numeric fields serialized as hexadecimal strings
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PublicKeyDto {
     pub n: String,

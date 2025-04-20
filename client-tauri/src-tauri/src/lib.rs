@@ -37,8 +37,8 @@ fn ring_sign(
     let pkeys: Vec<common::rsa::PublicKey> = pubkeys
         .into_iter()
         .map(|pk| {
-            let n = BigUint::parse_bytes(pk.n.as_bytes(), 10).ok_or("Invalid n")?;
-            let e = BigUint::parse_bytes(pk.e.as_bytes(), 10).ok_or("Invalid e")?;
+            let n = BigUint::parse_bytes(pk.n.as_bytes(), 16).ok_or("Invalid n")?;
+            let e = BigUint::parse_bytes(pk.e.as_bytes(), 16).ok_or("Invalid e")?;
             Ok(common::rsa::PublicKey { n, e })
         })
         .collect::<Result<_, &str>>()
@@ -50,8 +50,8 @@ fn ring_sign(
     let sig = common::ring::ring_sign(&pkeys, 0, &kp.secret, message.as_bytes(), max_bits)
         .map_err(|e| e.to_string())?;
     Ok(SignatureDto {
-        v: sig.v.to_string(),
-        xs: sig.xs.into_iter().map(|x| x.to_string()).collect(),
+        v: sig.v.to_str_radix(16),
+        xs: sig.xs.into_iter().map(|x| x.to_str_radix(16)).collect(),
     })
 }
 
@@ -64,18 +64,18 @@ fn ring_verify(
     let pkeys: Vec<common::rsa::PublicKey> = pubkeys
         .into_iter()
         .map(|pk| {
-            let n = BigUint::parse_bytes(pk.n.as_bytes(), 10).ok_or("Invalid n")?;
-            let e = BigUint::parse_bytes(pk.e.as_bytes(), 10).ok_or("Invalid e")?;
+            let n = BigUint::parse_bytes(pk.n.as_bytes(), 16).ok_or("Invalid n")?;
+            let e = BigUint::parse_bytes(pk.e.as_bytes(), 16).ok_or("Invalid e")?;
             Ok(common::rsa::PublicKey { n, e })
         })
         .collect::<Result<_, &str>>()
         .map_err(|e| e.to_string())?;
     let sig = RingSignature {
-        v: BigUint::parse_bytes(signature.v.as_bytes(), 10).ok_or("Invalid v")?,
+        v: BigUint::parse_bytes(signature.v.as_bytes(), 16).ok_or("Invalid v")?,
         xs: signature
             .xs
             .iter()
-            .map(|x| BigUint::parse_bytes(x.as_bytes(), 10).ok_or("Invalid xs"))
+            .map(|x| BigUint::parse_bytes(x.as_bytes(), 16).ok_or("Invalid xs"))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| "Invalid xs")?,
     };
