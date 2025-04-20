@@ -27,6 +27,7 @@ jobs:
             nettle-dev \
             libglib2.0-dev \
             libgtk-3-dev \
+            libjavascriptcoregtk-4.1-dev \
             clang \
             llvm \
             libssl-dev \
