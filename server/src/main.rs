@@ -7,6 +7,7 @@ use tracing_subscriber::{filter::EnvFilter, layer::SubscriberExt, util::Subscrib
 mod db;
 mod models;
 mod routes;
+mod utils;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

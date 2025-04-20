@@ -12,6 +12,8 @@ pub struct PublicKeyDto {
 /// Query param for fetching multiple public keys
 #[derive(Debug, Deserialize)]
 pub struct PublicKeysQuery {
+    /// カンマ区切り文字列を Vec<String> に変換するカスタムデシリアライザを指定
+    #[serde(deserialize_with = "crate::utils::comma_separated")]
     pub names: Vec<String>,
 }
 
