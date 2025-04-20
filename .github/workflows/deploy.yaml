@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  release:
+    types: [created] # GitHub上でReleaseが作成されたときにトリガー
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config nettle-dev clang llvm
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Add wasm target
+        run: |
+          rustup target add wasm32-unknown-unknown
+
+      - name: Build Rust workspace
+        run: |
+          cargo build --workspace --release
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build client-wasm
+        working-directory: client-wasm
+        run: |
+          wasm-pack build --target web
+
+      - name: Upload client-wasm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-wasm-pkg
+          path: client-wasm/pkg

@@ -14,8 +14,16 @@ jobs:
   check:
     name: Type Check
     runs-on: ubuntu-latest
+    env:
+      SQLX_OFFLINE: "true"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config nettle-dev clang llvm
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
