@@ -1,5 +1,9 @@
 # RSA を用いたリング署名の簡易的実装
 
+<p align="center">
+  <img src="images/top.gif" alt="Top GIF">
+</p>
+
 ## 概要
 
 このプロジェクトは、Rust 言語を用いて RSA ベースのリング署名を実装したものです。Rivest, Shamir, Tauman による論文 "How to Leak a Secret" (2001) に基づき、RSA 署名を拡張し、対称鍵暗号（ChaCha20）を内部で使用しています。リング署名の概念とその数学的背景を理解し、実際に動作するコードを提供することを目的としています。
