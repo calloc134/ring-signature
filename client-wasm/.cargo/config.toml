@@ -1,0 +1,3 @@
+[target.wasm32-unknown-unknown]
+linker = "clang"
+rustflags = ["--sysroot=/usr/share/wasi-sysroot"]
