@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT s.id, s.v, s.created_at, sm.position, sm.member_username, sm.x_value\n        FROM signatures s\n        JOIN signature_members sm ON s.id = sm.signature_id\n        WHERE s.id IN (\n            SELECT signature_id FROM signature_members WHERE member_username = $1\n        )\n        ORDER BY s.created_at, sm.position\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "v",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "member_username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "x_value",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eefb8665dae3d91c9a69722fa7935f360aea43989fc4d22fc42e3c133db67e78"
+}
