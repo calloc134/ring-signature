@@ -19,7 +19,8 @@ const VerifyPage: React.FC = () => {
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, boolean | null>>({});
 
-  const handleFetch = async () => {
+  const handleFetch = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!username) return toast.error("Enter Keybase user ID");
     setLoadingRecords(true);
     setRecords([]);
@@ -61,40 +62,36 @@ const VerifyPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex space-x-2 items-center">
+    <form onSubmit={handleFetch} className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-2 items-center">
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Keybase User ID"
-          className="border rounded px-2 py-1"
+          className="flex-1 border rounded px-4 py-2"
         />
         <button
-          onClick={handleFetch}
+          type="submit"
           disabled={loadingRecords}
           className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
         >
           {loadingRecords ? "Loading..." : "Fetch Signatures"}
         </button>
       </div>
-      <div className="space-y-2 max-h-96 overflow-auto">
+      <div className="space-y-2 max-h-[60vh] overflow-auto">
         {records.map((rec) => (
           <div
             key={rec.id}
-            className="flex justify-between items-center border p-2 rounded"
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center border p-4 rounded gap-4"
           >
-            <div className="flex-1">
-              <div className="text-sm font-medium">Message: {rec.message}</div>
+            <div className="flex-1 min-w-0 overflow-x-auto">
+              <p className="text-sm font-medium break-words">{rec.message}</p>
             </div>
-            <div>
-              <div className="text-sm text-gray-700">
-                v: {rec.v.slice(0, 10)}...
-              </div>
-              <div className="text-xs text-gray-500">
-                {new Date(rec.created_at).toLocaleString()}
-              </div>
+            <div className="flex flex-col text-xs text-gray-500 text-right min-w-[120px]">
+              <span className="text-gray-700">v: {rec.v.slice(0, 10)}...</span>
+              <span>{new Date(rec.created_at).toLocaleString()}</span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2">
               {results[rec.id] != null &&
                 (results[rec.id] ? (
                   <span className="text-green-500">✔︎</span>
@@ -104,7 +101,7 @@ const VerifyPage: React.FC = () => {
               <button
                 onClick={() => handleVerify(rec)}
                 disabled={verifying[rec.id]}
-                className="bg-gray-500 text-white px-2 py-1 rounded disabled:opacity-50"
+                className="bg-gray-500 text-white px-4 py-2 rounded disabled:opacity-50"
               >
                 {verifying[rec.id] ? "Verifying..." : "Verify"}
               </button>
@@ -112,10 +109,10 @@ const VerifyPage: React.FC = () => {
           </div>
         ))}
         {records.length === 0 && !loadingRecords && (
-          <div className="text-gray-500">No signatures</div>
+          <div className="text-gray-500 text-center py-4">No signatures</div>
         )}
       </div>
-    </div>
+    </form>
   );
 };
 
