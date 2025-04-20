@@ -300,7 +300,22 @@ GUI アプリケーションは、ユーザーが PGP 鍵（Keybase からエク
 
 まず環境を整える必要があります。以下の手順に従ってください。
 
-#### 6.2.1 GUI アプリケーションの起動
+#### 6.2.1 Keybase 鍵の準備
+
+[Keybase](https://keybase.io/) を使用して、PGP 鍵を生成します。Keybase の CLI をインストールし、鍵を生成します。  
+GUI の機能が正常に動作するためには、Keybase 上で鍵を生成する必要があります。
+
+```bash
+keybase pgp gen
+```
+
+次に、Web UI などを利用して、PGP 鍵をエクスポートし、ダウンロードします。
+
+![Keybase 鍵のエクスポート](./images/keybase-generate-key1.png)
+
+`Export my private key from Keybase`を選択することで、秘密鍵をローカル環境にダウンロードできます。
+
+#### 6.2.2 GUI アプリケーションの起動
 
 `client-tauri` ディレクトリに移動し、必要な依存関係をインストールします。
 
@@ -316,7 +331,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-#### 6.2.2 サーバアプリケーションの起動
+#### 6.2.3 サーバアプリケーションの起動
 
 GUI アプリケーションは、サーバーアプリケーションと連携して動作します。
 
@@ -341,7 +356,29 @@ DATABASE_URL=postgres://user:password@localhost/dbname cargo run
 
 #### 6.3.1 リング署名の生成
 
+![GUI アプリケーションの起動画面](./images/gui1.png)
+Secret Key FIle では、ファイルを選択し秘密鍵を指定します。
+
+Keybase User IDs では、リング署名に参加するメンバーの Keybase ユーザ ID を追加します。署名者の場合は、右側のボタンを押すことで署名者として指定できます。順番の変更も行うことができます。
+
+![GUI アプリケーションのリング署名生成画面](./images/gui2.png)
+
+Secret Key Password では、秘密鍵にパスフレーズが存在する場合に入力します。
+Message では、リング署名を生成するメッセージを入力します。
+
+Generate Signature ボタンを押すことで、リング署名が生成されます。
+
 #### 6.3.2 リング署名の検証
+
+![GUI アプリケーションのリング署名検証画面](./images/gui3.png)
+
+ユーザ ID を入力することで、対象ユーザがリングに含まれた署名を一覧で表示することができます。
+
+![GUI アプリケーションのリング署名検証画面](./images/gui4.png)
+
+右側の Verify ボタンを押すことで、選択した署名の検証を行います。検証結果は、署名が有効か無効かを示すメッセージとして表示されます。
+
+![GUI アプリケーションのリング署名検証結果画面](./images/gui5.png)
 
 ## 8. テスト
 
