@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT s.id, s.v, s.created_at, sm.position, sm.member_username, sm.x_value\n        FROM signatures s\n        JOIN signature_members sm ON s.id = sm.signature_id\n        WHERE s.id IN (\n            SELECT signature_id FROM signature_members WHERE member_username = $1\n        )\n        ORDER BY s.created_at, sm.position\n        ",
+  "query": "\n        SELECT s.id, s.v, s.message, s.created_at, sm.position, sm.member_username, sm.x_value\n        FROM signatures s\n        JOIN signature_members sm ON s.id = sm.signature_id\n        WHERE s.id IN (\n            SELECT signature_id FROM signature_members WHERE member_username = $1\n        )\n        ORDER BY s.created_at, sm.position\n        ",
   "describe": {
     "columns": [
       {
@@ -15,21 +15,26 @@
       },
       {
         "ordinal": 2,
+        "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "position",
         "type_info": "Int4"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "member_username",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "x_value",
         "type_info": "Text"
       }
@@ -45,8 +50,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "eefb8665dae3d91c9a69722fa7935f360aea43989fc4d22fc42e3c133db67e78"
+  "hash": "177febb5192e9dd34f83d3168f88b1e2c852024c5b1daf5a25d034617a9e72e5"
 }

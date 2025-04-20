@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// PublicKey DTO with numeric fields as decimal strings
+/// PublicKey DTO with numeric fields serialized as hexadecimal strings
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PublicKeyDto {
     pub n: String,
@@ -23,6 +23,7 @@ pub struct CreateSignatureDto {
     pub v: String,
     pub xs: Vec<String>,
     pub members: Vec<String>,
+    pub message: String,
 }
 
 /// Response body for created signature ID
@@ -36,6 +37,7 @@ pub struct CreateSignatureResponse {
 pub struct SignatureRecordDto {
     pub id: Uuid,
     pub v: String,
+    pub message: String,
     pub xs: Vec<String>,
     pub members: Vec<String>,
     pub created_at: DateTime<Utc>,

@@ -8,12 +8,14 @@ pub struct CreateSignatureRequest {
     pub v: String,
     pub xs: Vec<String>,
     pub members: Vec<String>,
+    pub message: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct SignatureRecord {
     pub id: Uuid,
     pub v: String,
+    pub message: String,
     pub xs: Vec<String>,
     pub members: Vec<String>,
     pub created_at: DateTime<Utc>,
@@ -26,8 +28,9 @@ pub async fn insert_signature(
     let mut tx = pool.begin().await?;
 
     let row = sqlx::query!(
-        r#"INSERT INTO signatures (v) VALUES ($1) RETURNING id"#,
+        r#"INSERT INTO signatures (v, message) VALUES ($1, $2) RETURNING id"#,
         req.v,
+        req.message,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -57,7 +60,7 @@ pub async fn get_signatures_for_user(
 ) -> Result<Vec<SignatureRecord>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"
-        SELECT s.id, s.v, s.created_at, sm.position, sm.member_username, sm.x_value
+        SELECT s.id, s.v, s.message, s.created_at, sm.position, sm.member_username, sm.x_value
         FROM signatures s
         JOIN signature_members sm ON s.id = sm.signature_id
         WHERE s.id IN (
@@ -82,6 +85,7 @@ pub async fn get_signatures_for_user(
             current = Some(SignatureRecord {
                 id: row.id,
                 v: row.v,
+                message: row.message,
                 xs: Vec::new(),
                 members: Vec::new(),
                 created_at: row.created_at,
