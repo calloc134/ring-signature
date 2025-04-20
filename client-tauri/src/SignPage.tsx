@@ -36,7 +36,7 @@ const SignPage: React.FC = () => {
       const pubkeys = await resp.json();
       const sig = await invoke("ring_sign", {
         pubkeys,
-        armored_secret: secretContent,
+        armoredSecret: secretContent,
         password: password || null,
         message,
       });
