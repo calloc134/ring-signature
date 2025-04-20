@@ -43,7 +43,7 @@ jobs:
           wasm-pack build --target web
 
       - name: Upload client-wasm artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: client-wasm-pkg
           path: client-wasm/pkg
