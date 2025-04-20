@@ -1,6 +1,7 @@
 use axum::{Extension, Router};
 use sqlx::PgPool;
 use std::net::SocketAddr;
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{filter::EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -30,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(routes::users::router())
         .merge(routes::signatures::router())
+        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .layer(Extension(pool));
 
