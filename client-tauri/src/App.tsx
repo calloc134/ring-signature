@@ -1,27 +1,29 @@
-import { invoke } from "@tauri-apps/api/core";
+import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import SignPage from "./SignPage";
+import VerifyPage from "./VerifyPage";
+import { Toaster } from "react-hot-toast";
 import "./App.css";
 
 function App() {
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    await invoke("greet", { name: "hjogehoge" });
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-    </main>
+    <BrowserRouter>
+      <div className="container mx-auto p-4">
+        <nav className="flex space-x-4 mb-4">
+          <Link to="/sign" className="text-blue-500 hover:underline">
+            Sign
+          </Link>
+          <Link to="/verify" className="text-blue-500 hover:underline">
+            Verify
+          </Link>
+        </nav>
+        <Routes>
+          <Route path="/sign" element={<SignPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
+          <Route path="*" element={<SignPage />} />
+        </Routes>
+      </div>
+      <Toaster position="top-right" />
+    </BrowserRouter>
   );
 }
 

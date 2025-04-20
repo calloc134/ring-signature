@@ -930,6 +930,8 @@ dependencies = [
 name = "client-tauri"
 version = "0.1.0"
 dependencies = [
+ "common",
+ "num-bigint",
  "serde",
  "serde_json",
  "tauri",
