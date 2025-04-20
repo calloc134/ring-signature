@@ -33,6 +33,7 @@ fn ring_sign(
     armored_secret: String,
     password: Option<String>,
     message: String,
+    signer_index: usize,
 ) -> Result<SignatureDto, String> {
     let pkeys: Vec<common::rsa::PublicKey> = pubkeys
         .into_iter()
@@ -45,10 +46,26 @@ fn ring_sign(
         .map_err(|e| e.to_string())?;
     let kp = common::rsa::load_keypair_from_pgp_str(&armored_secret, password.as_deref())
         .map_err(|e| e.to_string())?;
+    // Validate signer_index
+    if signer_index >= pkeys.len() {
+        return Err("Invalid signer index".to_string());
+    }
+    // Verify secret key matches the public key for the signer
+    let derived_pk = &kp.public;
+    let expected_pk = &pkeys[signer_index];
+    if derived_pk.n != expected_pk.n || derived_pk.e != expected_pk.e {
+        return Err("Secret key does not match specified Keybase user".to_string());
+    }
     let max_bits = pkeys.iter().map(|pk| pk.n.bits()).max().unwrap_or(0) as usize
         + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    let sig = common::ring::ring_sign(&pkeys, 0, &kp.secret, message.as_bytes(), max_bits)
-        .map_err(|e| e.to_string())?;
+    let sig = common::ring::ring_sign(
+        &pkeys,
+        signer_index,
+        &kp.secret,
+        message.as_bytes(),
+        max_bits,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(SignatureDto {
         v: sig.v.to_str_radix(16),
         xs: sig.xs.into_iter().map(|x| x.to_str_radix(16)).collect(),

@@ -6,6 +6,7 @@ const SignPage: React.FC = () => {
   const [secretContent, setSecretContent] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [usernames, setUsernames] = useState<string>("");
+  const [signerUsername, setSignerUsername] = useState<string>("");
   const [message, setMessage] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -19,11 +20,16 @@ const SignPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (!signerUsername) return toast.error("Signer Keybase user ID required");
     if (!secretContent) return toast.error("Secret key file required");
     const names = usernames
       .split(",")
       .map((s) => s.trim())
       .filter((s) => s);
+    console.log("Keybase IDs:", names);
+    if (!names.includes(signerUsername)) {
+      return toast.error("Signer user ID must be included in Keybase IDs list");
+    }
     if (names.length === 0)
       return toast.error("Enter at least one Keybase user ID");
     if (!message) return toast.error("Message cannot be empty");
@@ -34,11 +40,13 @@ const SignPage: React.FC = () => {
       );
       if (!resp.ok) throw new Error("Failed to fetch public keys");
       const pubkeys = await resp.json();
+      const signerIndex = names.indexOf(signerUsername);
       const sig = await invoke("ring_sign", {
         pubkeys,
         armoredSecret: secretContent,
         password: password || null,
         message,
+        signerIndex,
       });
       console.log("Signature:", sig);
       const { v, xs } = sig as { v: string; xs: string[] };
@@ -74,6 +82,14 @@ const SignPage: React.FC = () => {
         <input
           value={usernames}
           onChange={(e) => setUsernames(e.target.value)}
+          className="mt-1 w-full border rounded px-2 py-1"
+        />
+      </div>
+      <div>
+        <label className="block font-medium">Signer Keybase User ID</label>
+        <input
+          value={signerUsername}
+          onChange={(e) => setSignerUsername(e.target.value)}
           className="mt-1 w-full border rounded px-2 py-1"
         />
       </div>
