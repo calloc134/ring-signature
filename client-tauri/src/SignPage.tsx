@@ -2,6 +2,20 @@ import React, { useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import { invoke } from "@tauri-apps/api/core";
 import { useDropzone } from "react-dropzone";
+import { useMutation } from "@tanstack/react-query";
+
+// variables for mutation
+interface SignatureVariables {
+  users: string[];
+  secretContent: string;
+  password: string | null;
+  message: string;
+  signerIndex: number;
+}
+interface SignatureResult {
+  v: string;
+  xs: string[];
+}
 
 const SignPage: React.FC = () => {
   const [secretContent, setSecretContent] = useState<string>("");
@@ -11,7 +25,6 @@ const SignPage: React.FC = () => {
     { id: "", isSigner: false },
   ]);
   const [message, setMessage] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -57,50 +70,69 @@ const SignPage: React.FC = () => {
     });
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const validUsers = users.filter((u) => u.id.trim());
-    if (!secretContent) return toast.error("Secret key file required");
-    if (validUsers.length === 0)
-      return toast.error("Enter at least one Keybase user ID");
-    const signerIndex = validUsers.findIndex((u) => u.isSigner);
-    if (signerIndex < 0) return toast.error("Select one signer");
-    if (!message) return toast.error("Message cannot be empty");
-    setLoading(true);
-    try {
+  const signMutation = useMutation<SignatureResult, Error, SignatureVariables>({
+    mutationFn: async ({
+      users,
+      secretContent,
+      password,
+      message,
+      signerIndex,
+    }) => {
+      // fetch pubkeys
       const resp = await fetch(
-        `http://localhost:8080/keys?names=${validUsers
-          .map((u) => u.id)
-          .join(",")}`
+        `http://localhost:8080/keys?names=${users.join(",")}`
       );
       if (!resp.ok) throw new Error("Failed to fetch public keys");
       const pubkeys = await resp.json();
-      const sig = await invoke("ring_sign", {
+
+      // ring sign
+      const sig = (await invoke("ring_sign", {
         pubkeys,
         armoredSecret: secretContent,
-        password: password || null,
+        password,
         message,
         signerIndex,
-      });
-      console.log("Signature:", sig);
-      const { v, xs } = sig as { v: string; xs: string[] };
+      })) as { v: string; xs: string[] };
+
+      // post signature
       const postRes = await fetch("http://localhost:8080/signatures", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          v,
-          xs,
-          members: validUsers.map((u) => u.id),
+          v: sig.v,
+          xs: sig.xs,
+          members: users,
           message,
         }),
       });
       if (!postRes.ok) throw new Error("Failed to send signature");
+      return sig;
+    },
+    onSuccess: () => {
       toast.success("Signature generated and sent");
-    } catch (e: any) {
-      toast.error(e.toString());
-    } finally {
-      setLoading(false);
-    }
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const validUsers = users.filter((u) => u.id.trim()).map((u) => u.id);
+    const signerIndex = validUsers.findIndex((_, i) => users[i].isSigner);
+    if (!secretContent) return toast.error("Secret key file required");
+    if (validUsers.length === 0)
+      return toast.error("Enter at least one Keybase user ID");
+    if (signerIndex < 0) return toast.error("Select one signer");
+    if (!message) return toast.error("Message cannot be empty");
+
+    signMutation.mutate({
+      users: validUsers,
+      secretContent,
+      password: password || null,
+      message,
+      signerIndex,
+    });
   };
 
   return (
@@ -203,10 +235,10 @@ const SignPage: React.FC = () => {
         </div>
         <button
           type="submit"
-          disabled={loading}
+          disabled={signMutation.isPending}
           className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
         >
-          {loading ? "Signing..." : "Generate Signature"}
+          {signMutation.isPending ? "Signing..." : "Generate Signature"}
         </button>
       </div>
     </form>

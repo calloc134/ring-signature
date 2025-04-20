@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { invoke } from "@tauri-apps/api/core";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface SignatureRecord {
   id: string;
@@ -13,51 +14,56 @@ interface SignatureRecord {
 
 const VerifyPage: React.FC = () => {
   const [username, setUsername] = useState<string>("");
-  // message is provided by each signature record
-  const [records, setRecords] = useState<SignatureRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState<boolean>(false);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, boolean | null>>({});
 
-  const handleFetch = async (e?: React.FormEvent) => {
+  // fetch signatures on demand
+  const {
+    data: records = [],
+    isLoading: loadingRecords,
+    refetch,
+  } = useQuery<SignatureRecord[], Error>({
+    queryKey: ["signatures", username],
+    queryFn: async () => {
+      const res = await fetch(`http://localhost:8080/signatures/${username}`);
+      if (!res.ok) throw new Error("Failed to fetch signatures");
+      return (await res.json()) as SignatureRecord[];
+    },
+    enabled: false,
+  });
+
+  const queryClient = useQueryClient();
+
+  const handleFetch = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!username) return toast.error("Enter Keybase user ID");
-    setLoadingRecords(true);
-    setRecords([]);
-    try {
-      const resp = await fetch(`http://localhost:8080/signatures/${username}`);
-      if (!resp.ok) throw new Error("Failed to fetch signatures");
-      const data: SignatureRecord[] = await resp.json();
-      setRecords(data);
-    } catch (e: any) {
-      toast.error(e.toString());
-    } finally {
-      setLoadingRecords(false);
-    }
+    refetch();
   };
 
   const handleVerify = async (rec: SignatureRecord) => {
-    setVerifying((prev) => ({ ...prev, [rec.id]: true }));
+    setVerifying((p) => ({ ...p, [rec.id]: true }));
     try {
-      const resp = await fetch(
-        `http://localhost:8080/keys?names=${rec.members.join(",")}`
-      );
-      if (!resp.ok) throw new Error("Failed to fetch public keys");
-      const pubkeys = await resp.json();
-      const ok = await invoke("ring_verify", {
+      const pubkeys = await queryClient.fetchQuery<string[]>({
+        queryKey: ["pubkeys", rec.members],
+        queryFn: async () => {
+          const res = await fetch(
+            `http://localhost:8080/keys?names=${rec.members.join(",")}`
+          );
+          if (!res.ok) throw new Error("Failed to fetch public keys");
+          return (await res.json()) as string[];
+        },
+      });
+      const ok = (await invoke("ring_verify", {
         pubkeys,
         signature: { v: rec.v, xs: rec.xs },
         message: rec.message,
-      });
-      const verified = ok as boolean;
-      setResults((prev) => ({ ...prev, [rec.id]: verified }));
-      verified
-        ? toast.success("Signature valid")
-        : toast.error("Signature invalid");
+      })) as boolean;
+      setResults((p) => ({ ...p, [rec.id]: ok }));
+      ok ? toast.success("Signature valid") : toast.error("Signature invalid");
     } catch (e: any) {
       toast.error(e.toString());
     } finally {
-      setVerifying((prev) => ({ ...prev, [rec.id]: false }));
+      setVerifying((p) => ({ ...p, [rec.id]: false }));
     }
   };
 
