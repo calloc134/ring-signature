@@ -1,10 +1,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  release:
+    types: [created] # GitHub上でReleaseが作成されたときにトリガー
 
 jobs:
   build:
