@@ -6,7 +6,7 @@ use reqwest::Client;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 
-static KEY_CACHE: Lazy<RwLock<HashMap<String, PublicKeyDto>>> =
+static KEY_CACHE: Lazy<RwLock<HashMap<String, Option<PublicKeyDto>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| Client::new());
 
@@ -19,14 +19,24 @@ async fn get_public_keys(
 ) -> Result<Json<Vec<PublicKeyDto>>, (StatusCode, String)> {
     let mut result = Vec::with_capacity(query.names.len());
     for name in &query.names {
-        // Check cache
-        let dto_opt = {
+        // Check cache: Some(Some) -> push; Some(None) -> error
+        let cached_opt = {
             let cache = KEY_CACHE.read().await;
             cache.get(name).cloned()
         };
-        if let Some(dto) = dto_opt {
-            result.push(dto);
-            continue;
+        if let Some(opt_dto) = cached_opt {
+            match opt_dto {
+                Some(dto) => {
+                    result.push(dto);
+                    continue;
+                }
+                None => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        format!("No valid signing key for {}", name),
+                    ))
+                }
+            }
         }
         // Fetch from Keybase
         let url = format!("https://keybase.io/{}/key.asc", name);
@@ -45,18 +55,27 @@ async fn get_public_keys(
             .text()
             .await
             .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
-        // Parse PGP armored
-        let key = load_public_key_from_pgp_str(&text)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-        let dto = PublicKeyDto {
-            n: key.n.to_string(),
-            e: key.e.to_string(),
-        };
-        {
-            let mut cache = KEY_CACHE.write().await;
-            cache.insert(name.clone(), dto.clone());
+        // Parse PGP armored, cache and error on no valid signing key
+        match load_public_key_from_pgp_str(&text) {
+            Ok(key) => {
+                let dto = PublicKeyDto {
+                    n: key.n.to_string(),
+                    e: key.e.to_string(),
+                };
+                let mut cache = KEY_CACHE.write().await;
+                cache.insert(name.clone(), Some(dto.clone()));
+                result.push(dto);
+            }
+            Err(e) if e.to_string().contains("No valid signing key") => {
+                let mut cache = KEY_CACHE.write().await;
+                cache.insert(name.clone(), None);
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("No valid signing key for {}", name),
+                ));
+            }
+            Err(e) => return Err((StatusCode::BAD_REQUEST, e.to_string())),
         }
-        result.push(dto);
     }
     Ok(Json(result))
 }
