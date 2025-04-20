@@ -167,7 +167,7 @@ const SignPage: React.FC = () => {
                 onChange={(e) => handleUserChange(i, e.target.value)}
                 disabled={u.isSigner}
                 className={`flex-1 border rounded px-2 py-1 ${
-                  u.isSigner ? "bg-gray-100" : ""
+                  u.isSigner ? "bg-gray-300" : ""
                 }`}
                 placeholder="User ID"
               />
