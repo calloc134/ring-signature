@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO signatures (v) VALUES ($1) RETURNING id",
+  "query": "INSERT INTO signatures (v, message) VALUES ($1, $2) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Text"
       ]
     },
@@ -18,5 +19,5 @@
       false
     ]
   },
-  "hash": "ea8f79597e0e7e2082eeba07cea4c97d18d22562f584a6e09befcb8ce0ee324e"
+  "hash": "81772a3c2b68420f9ea803f3765916924bc4a2d9f3ea6b9a67ac64003a828332"
 }
