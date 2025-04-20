@@ -1,7 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-use common::ring::{ring_sign, ring_verify, RingSignature};
-use common::rsa::PublicKey as CommonPub;
+use common::ring::RingSignature;
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 
@@ -48,7 +47,7 @@ fn ring_sign(
         .map_err(|e| e.to_string())?;
     let max_bits = pkeys.iter().map(|pk| pk.n.bits()).max().unwrap_or(0) as usize
         + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    let sig = ring_sign(&pkeys, 0, &kp.secret, message.as_bytes(), max_bits)
+    let sig = common::ring::ring_sign(&pkeys, 0, &kp.secret, message.as_bytes(), max_bits)
         .map_err(|e| e.to_string())?;
     Ok(SignatureDto {
         v: sig.v.to_string(),
@@ -82,7 +81,8 @@ fn ring_verify(
     };
     let max_bits = pkeys.iter().map(|pk| pk.n.bits()).max().unwrap_or(0) as usize
         + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    let ok = ring_verify(&pkeys, &sig, message.as_bytes(), max_bits).map_err(|e| e.to_string())?;
+    let ok = common::ring::ring_verify(&pkeys, &sig, message.as_bytes(), max_bits)
+        .map_err(|e| e.to_string())?;
     Ok(ok)
 }
 
