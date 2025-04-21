@@ -53,6 +53,16 @@ jobs:
             libssl-dev \
             libpq-dev
 
+
+   # macOS x86_64 用依存インストール
+      - name: Install system dependencies on macOS (Intel)
+        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'  # 条件付き実行&#8203;:contentReference[oaicite:9]{index=9}
+        run: |
+          brew update
+          brew install nettle      # Nettle ライブラリ&#8203;:contentReference[oaicite:10]{index=10}
+          brew install pkgconf     # pkg-config 互換ツール&#8203;:contentReference[oaicite:11]{index=11}
+
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
