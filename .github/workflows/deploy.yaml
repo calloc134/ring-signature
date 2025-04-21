@@ -1,6 +1,5 @@
 # GitHub Actions: Release Build and Upload
 
-# オプショナルですが、ワークフロー名を定義すると分かりやすくなります
 name: Release Build and Upload
 
 on:
@@ -9,27 +8,10 @@ on:
 
 jobs:
   publish:
-    name: Build and Release (${{ matrix.target }})
+    name: Build and Release (linux)
     permissions:
       contents: write # Release への書き込み権限
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Windows x86_64 (MSVC)
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          # Linux x86_64 (GNU)
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          # macOS x86_64 (Intel)
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          # macOS aarch64 (Apple Silicon)
-          - target: aarch64-apple-darwin
-            os: macos-latest
-
-    runs-on: ${{ matrix.os }} # ジョブが実行されるOS
+    runs-on: ubuntu-latest
 
     steps:
       # 1. リポジトリをチェックアウト
@@ -56,25 +38,29 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
+          targets: x86_64-unknown-linux-gnu
 
       - name: Build common library
         run: |
-          cargo build --release --target ${{ matrix.target }} -p common
+          cargo build --release --target x86_64-unknown-linux-gnu -p common
 
       - name: Build & Release Tauri App
-        id: tauri # このステップの出力を後で参照するためのID
+        id: tauri
         uses: tauri-apps/tauri-action@v0.5.20
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Release作成やアップロードに必要なトークン
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: client-tauri # Tauriプロジェクトのパス
-          args: --target ${{ matrix.target }} --release # tauri build に渡す引数
+          projectPath: client-tauri
+          args: --target x86_64-unknown-linux-gnu --release
 
       - name: Upload common artifact
         uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.tauri.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/libcommon.rlib
-          asset_name: libcommon-${{ matrix.target }}.rlib
+          # tauri-action の出力変数名は releaseUploadUrl
+          upload_url: ${{ steps.tauri.outputs.releaseUploadUrl }}
+          # Linux x86_64 ターゲットに合わせてハードコード
+          asset_path: target/x86_64-unknown-linux-gnu/release/libcommon.rlib
+          asset_name: libcommon-x86_64-unknown-linux-gnu.rlib
           asset_content_type: application/octet-stream
