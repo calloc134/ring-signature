@@ -78,10 +78,9 @@ const SignPage: React.FC = () => {
       message,
       signerIndex,
     }) => {
+      const baseUrl = import.meta.env.VITE_BACKEND_URL;
       // fetch pubkeys
-      const resp = await fetch(
-        `http://localhost:8080/keys?names=${users.join(",")}`
-      );
+      const resp = await fetch(`${baseUrl}/keys?names=${users.join(",")}`);
       if (!resp.ok) throw new Error("Failed to fetch public keys");
       const pubkeys = await resp.json();
 
@@ -95,7 +94,7 @@ const SignPage: React.FC = () => {
       })) as { v: string; xs: string[] };
 
       // post signature
-      const postRes = await fetch("http://localhost:8080/signatures", {
+      const postRes = await fetch(`${baseUrl}/signatures`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
