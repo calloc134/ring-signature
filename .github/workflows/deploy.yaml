@@ -46,15 +46,24 @@ jobs:
             mingw-w64-x86_64-sqlite3
             mingw-w64-x86_64-capnproto
 
-      # macOS x86_64 用依存インストール
+      # 3. Windows: MSYS2 内で Rust をインストール
+      - name: Install Rust in MSYS2
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          source ~/.cargo/env
+
+      # 4. macOS x86_64 用依存インストール
       - name: Install system dependencies on macOS (Intel)
         if: runner.os == 'macOS' && startsWith(matrix.target, 'x86_64-apple-darwin')
         run: |
           brew update
-          brew install nettle      
+          brew install nettle
           brew install pkgconf
 
-      - name: Install system dependencies
+      # 5. Linux 用依存インストール
+      - name: Install system dependencies on Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -71,28 +80,31 @@ jobs:
             libssl-dev \
             libpq-dev
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      # 6. Rust ツールチェーンセットアップ (非 Windows)
+      - name: Setup Rust toolchain for non-Windows
+        if: runner.os != 'Windows'
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
+          components: rustfmt
+          target: ${{ matrix.target }}
 
-      # 3. Windows: 共通ライブラリビルド（MSYS2 Bash で実行）
+      # 7. Windows: 共通ライブラリビルド（MSYS2 Bash）
       - name: Build common library (Windows)
         if: runner.os == 'Windows'
-        shell: msys2 {0} # MSYS2 の bash をデフォルトシェルに指定 :contentReference[oaicite:1]{index=1}
+        shell: msys2 {0}
         run: |
           export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
           cargo build --release --target ${{ matrix.target }} -p common
 
-      # 4. Linux/macOS: 共通ライブラリビルド
+      # 8. Linux/macOS: 共通ライブラリビルド
       - name: Build common library (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cargo build --release --target ${{ matrix.target }} -p common
 
-      # 5. Windows: Tauri アプリビルド（MSYS2 Bash）
+      # 9. Windows: Tauri アプリビルド（MSYS2 Bash）
       - name: Build Tauri App (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -102,24 +114,9 @@ jobs:
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
           cargo tauri build --release --target ${{ matrix.target }}
 
-      # 6. Linux/macOS: Tauri アプリビルド
+      # 10. Linux/macOS: Tauri アプリビルド
       - name: Build Tauri App (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cd client-tauri
-          cargo tauri build --release --target ${{ matrix.target }}
-
-      # 7. バンドルを ZIP 化してリリースへアップロード
-      - name: Archive bundles
-        run: |
-          zip -r release-${{ matrix.target }}.zip \
-            client-tauri/target/${{ matrix.target }}/release/bundle \
-            target/${{ matrix.target }}/release/libcommon.rlib
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release-${{ matrix.target }}.zip
-          asset_name: release-${{ matrix.target }}.zip
-          asset_content_type: application/zip
+          cargo tauri build --release --target $
