@@ -1,40 +1,54 @@
-# GitHub Actions: Release Build and Upload
-
-# オプショナルですが、ワークフロー名を定義すると分かりやすくなります
 name: Release Build and Upload
 
 on:
   release:
-    types: [created] # GitHub Release 作成時にトリガー
+    types: [created]
+
+permissions:
+  contents: write
 
 jobs:
   publish:
-    name: Build and Release (${{ matrix.target }})
-    permissions:
-      contents: write # Release への書き込み権限
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Windows x86_64 (MSVC)
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          # Linux x86_64 (GNU)
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          # macOS x86_64 (Intel)
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          # macOS aarch64 (Apple Silicon)
-          - target: aarch64-apple-darwin
-            os: macos-latest
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
 
-    runs-on: ${{ matrix.os }} # ジョブが実行されるOS
+    runs-on: ${{ matrix.os }}
 
     steps:
       # 1. リポジトリをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # 2. Windows: MSYS2 環境構築
+      - name: Setup MSYS2 on Windows
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: MINGW64
+          install: |
+            mingw-w64-x86_64-clang
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-nettle       # Nettle ライブラリ
+            mingw-w64-x86_64-zip          # zip ユーティリティ :contentReference[oaicite:0]{index=0}
+
+      # macOS x86_64 用依存インストール
+      - name: Install system dependencies on macOS (Intel)
+        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
+        run: |
+          brew update
+          brew install nettle      # Nettle ライブラリ
+          brew install pkgconf     # pkg-config 互換ツール
 
       - name: Install system dependencies
         if: runner.os == 'Linux'
@@ -53,53 +67,49 @@ jobs:
             libssl-dev \
             libpq-dev
 
-      # macOS x86_64 用依存インストール
-      - name: Install system dependencies on macOS (Intel)
-        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin' # 条件付き実行&#8203;:contentReference[oaicite:9]{index=9}
-        run: |
-          brew update
-          brew install nettle      # Nettle ライブラリ&#8203;:contentReference[oaicite:10]{index=10}
-          brew install pkgconf     # pkg-config 互換ツール&#8203;:contentReference[oaicite:11]{index=11}
-
-      - name: Setup MSYS2 on Windows
+      # 3. Windows: 共通ライブラリビルド（MSYS2 Bash で実行）
+      - name: Build common library (Windows)
         if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          update: true
-          msystem: MINGW64
-          install: |
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-clang
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-nettle
-            mingw-w64-x86_64-bzip2
-            mingw-w64-x86_64-sqlite3
-            mingw-w64-x86_64-capnproto
+        shell: msys2 {0} # MSYS2 の bash をデフォルトシェルに指定 :contentReference[oaicite:1]{index=1}
+        run: |
+          export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+          export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+          cargo build --release --target ${{ matrix.target }} -p common
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: ${{ matrix.target }}
-
-      - name: Build common library
+      # 4. Linux/macOS: 共通ライブラリビルド
+      - name: Build common library (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           cargo build --release --target ${{ matrix.target }} -p common
 
-      - name: Build & Release Tauri App
-        id: tauri # このステップの出力を後で参照するためのID
-        uses: tauri-apps/tauri-action@v0.5.20
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Release作成やアップロードに必要なトークン
-        with:
-          projectPath: client-tauri # Tauriプロジェクトのパス
-          args: --target ${{ matrix.target }} --release # tauri build に渡す引数
+      # 5. Windows: Tauri アプリビルド（MSYS2 Bash）
+      - name: Build Tauri App (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd client-tauri
+          export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+          export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+          cargo tauri build --release --target ${{ matrix.target }}
 
-      - name: Upload common artifact
+      # 6. Linux/macOS: Tauri アプリビルド
+      - name: Build Tauri App (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd client-tauri
+          cargo tauri build --release --target ${{ matrix.target }}
+
+      # 7. バンドルを ZIP 化してリリースへアップロード
+      - name: Archive bundles
+        run: |
+          zip -r release-${{ matrix.target }}.zip \
+            client-tauri/target/${{ matrix.target }}/release/bundle \
+            target/${{ matrix.target }}/release/libcommon.rlib
+
+      - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
         with:
-          upload_url: ${{ steps.tauri.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/libcommon.rlib
-          asset_name: libcommon-${{ matrix.target }}.rlib
-          asset_content_type: application/octet-stream
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release-${{ matrix.target }}.zip
+          asset_name: release-${{ matrix.target }}.zip
+          asset_content_type: application/zip
