@@ -3,7 +3,6 @@ use shuttle_runtime::CustomError;
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing_subscriber::{filter::EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod db;
 mod models;
@@ -13,12 +12,13 @@ mod utils;
 // Shuttleでデプロイできるような実装に変更
 #[shuttle_runtime::main]
 async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::ShuttleAxum {
-    tracing_subscriber::registry()
-        .with(EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // Shuttleが初期化するのでサブスクライバは不要
+    // tracing_subscriber::registry()
+    //     .with(EnvFilter::new(
+    //         std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    //     ))
+    //     .with(tracing_subscriber::fmt::layer())
+    //     .init();
 
     // マイグレーションを実行
     sqlx::migrate!()
