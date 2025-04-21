@@ -51,15 +51,19 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
+          # MSYS2 の $HOME に Rust ツールチェーンをインストールする
+          export CARGO_HOME="$HOME/.cargo"
+          export RUSTUP_HOME="$HOME/.rustup"
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
-          source ~/.cargo/env
+          # インストールされた cargo を有効化
+          source "$CARGO_HOME/env"
 
       # 4. macOS x86_64 用依存インストール
       - name: Install system dependencies on macOS (Intel)
         if: runner.os == 'macOS' && startsWith(matrix.target, 'x86_64-apple-darwin')
         run: |
           brew update
-          brew install nettle
+          brew install nettle      
           brew install pkgconf
 
       # 5. Linux 用依存インストール
@@ -119,4 +123,19 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd client-tauri
-          cargo tauri build --release --target $
+          cargo tauri build --release --target ${{ matrix.target }}
+
+      # 11. バンドルを ZIP 化してリリースへアップロード
+      - name: Archive bundles
+        run: |
+          zip -r release-${{ matrix.target }}.zip \
+            client-tauri/target/${{ matrix.target }}/release/bundle \
+            target/${{ matrix.target }}/release/libcommon.rlib
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release-${{ matrix.target }}.zip
+          asset_name: release-${{ matrix.target }}.zip
+          asset_content_type: application/zip
