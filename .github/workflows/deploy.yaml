@@ -60,7 +60,7 @@ jobs:
 
       # 4. macOS x86_64 用依存インストール
       - name: Install system dependencies on macOS (Intel)
-        if: runner.os == 'macOS' && startsWith(matrix.target, 'x86_64-apple-darwin')
+        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
         run: |
           brew update
           brew install nettle      
