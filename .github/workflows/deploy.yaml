@@ -29,7 +29,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Windows: MSYS2 環境構築
+      # MSYS2 環境構築
       - name: Setup MSYS2 on Windows
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -42,21 +42,22 @@ jobs:
             mingw-w64-x86_64-clang
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-nettle
-            mingw-w64-x86_64-bzip2
-            mingw-w64-x86_64-sqlite3
-            mingw-w64-x86_64-capnproto
 
-      # 3. Windows: MSYS2 内で Rust をインストール
+      # 既存 Rustup を削除して新規インストールに強制
+      - name: Clean existing Rustup
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          rm -rf /home/runneradmin/.cargo
+          rm -rf /home/runneradmin/.rustup
+
+      # MSYS2 内で Rust を新規インストール
       - name: Install Rust in MSYS2
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          # MSYS2 の $HOME に Rust ツールチェーンをインストールする
-          export CARGO_HOME="$HOME/.cargo"
-          export RUSTUP_HOME="$HOME/.rustup"
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
-          # インストールされた cargo を有効化
-          source "$CARGO_HOME/env"
+          source "$HOME/.cargo/env"
 
       # 4. macOS x86_64 用依存インストール
       - name: Install system dependencies on macOS (Intel)
