@@ -25,7 +25,8 @@ const VerifyPage: React.FC = () => {
   } = useQuery<SignatureRecord[], Error>({
     queryKey: ["signatures", username],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:8080/signatures/${username}`);
+      const baseUrl = import.meta.env.VITE_BACKEND_URL;
+      const res = await fetch(`${baseUrl}/signatures/${username}`);
       if (!res.ok) throw new Error("Failed to fetch signatures");
       return (await res.json()) as SignatureRecord[];
     },
@@ -46,8 +47,9 @@ const VerifyPage: React.FC = () => {
       const pubkeys = await queryClient.fetchQuery<string[]>({
         queryKey: ["pubkeys", rec.members],
         queryFn: async () => {
+          const baseUrl = import.meta.env.VITE_BACKEND_URL;
           const res = await fetch(
-            `http://localhost:8080/keys?names=${rec.members.join(",")}`
+            `${baseUrl}/keys?names=${rec.members.join(",")}`
           );
           if (!res.ok) throw new Error("Failed to fetch public keys");
           return (await res.json()) as string[];
@@ -69,7 +71,7 @@ const VerifyPage: React.FC = () => {
 
   return (
     <form onSubmit={handleFetch} className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-2 items-center">
+      <div className="flex flex-row  gap-2 items-center">
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -86,31 +88,47 @@ const VerifyPage: React.FC = () => {
       </div>
       <div className="space-y-2 max-h-[60vh] overflow-auto">
         {records.map((rec) => (
-          <div
-            key={rec.id}
-            className="flex flex-col sm:flex-row justify-between items-start sm:items-center border p-4 rounded gap-4"
-          >
-            <div className="flex-1 min-w-0 overflow-x-auto">
-              <p className="text-sm font-medium break-words">{rec.message}</p>
+          <div key={rec.id} className="flex flex-col border p-4 rounded gap-4">
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium break-words">{rec.message}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2 min-w-[320px]">
+                <div className="text-xs text-gray-500 text-right">
+                  <span className="text-gray-700 block">
+                    v: {rec.v.slice(0, 30)}...
+                  </span>
+                  <span>{new Date(rec.created_at).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {results[rec.id] != null &&
+                    (results[rec.id] ? (
+                      <span className="text-green-500">✔︎</span>
+                    ) : (
+                      <span className="text-red-500">✗</span>
+                    ))}
+                  <button
+                    onClick={() => handleVerify(rec)}
+                    disabled={verifying[rec.id]}
+                    className="bg-gray-500 text-white px-4 py-2 rounded disabled:opacity-50 text-sm"
+                  >
+                    {verifying[rec.id] ? "Verifying..." : "Verify"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col text-xs text-gray-500 text-right min-w-[120px]">
-              <span className="text-gray-700">v: {rec.v.slice(0, 10)}...</span>
-              <span>{new Date(rec.created_at).toLocaleString()}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {results[rec.id] != null &&
-                (results[rec.id] ? (
-                  <span className="text-green-500">✔︎</span>
-                ) : (
-                  <span className="text-red-500">✗</span>
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-xs text-gray-600 mb-1">Members:</p>
+              <div className="flex flex-wrap gap-1">
+                {rec.members.map((member) => (
+                  <span
+                    key={member}
+                    className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded"
+                  >
+                    {member}
+                  </span>
                 ))}
-              <button
-                onClick={() => handleVerify(rec)}
-                disabled={verifying[rec.id]}
-                className="bg-gray-500 text-white px-4 py-2 rounded disabled:opacity-50"
-              >
-                {verifying[rec.id] ? "Verifying..." : "Verify"}
-              </button>
+              </div>
             </div>
           </div>
         ))}

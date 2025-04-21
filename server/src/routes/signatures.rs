@@ -12,7 +12,7 @@ use sqlx::PgPool;
 pub fn router() -> Router {
     Router::new()
         .route("/signatures", post(create_signature))
-        .route("/signatures/:username", get(fetch_signatures))
+        .route("/signatures/{username}", get(fetch_signatures))
 }
 
 async fn create_signature(

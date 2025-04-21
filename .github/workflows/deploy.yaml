@@ -1,0 +1,68 @@
+# GitHub Actions: Release Build and Upload
+
+# オプショナルですが、ワークフロー名を定義すると分かりやすくなります
+name: Release Build and Upload
+
+on:
+  release:
+    types: [created] # GitHub Release 作成時にトリガー
+
+jobs:
+  publish:
+    name: Build and Release (${{ matrix.target }})
+    permissions:
+      contents: write # Release への書き込み権限
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x86_64 (MSVC)
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          # Linux x86_64 (GNU)
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          # macOS x86_64 (Intel)
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          # macOS aarch64 (Apple Silicon)
+          - target: aarch64-apple-darwin
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }} # ジョブが実行されるOS
+
+    steps:
+      # 1. リポジトリをチェックアウト
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Rust 工具チェインをセットアップ（ビルドターゲットもインストール）
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      # 3. 共通ライブラリ "common" のビルド
+      - name: Build common library
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p common
+
+      # 4. Tauri アプリのビルド & Release 作成
+      - name: Build & Release Tauri App
+        id: tauri # このステップの出力を後で参照するためのID
+        uses: tauri-apps/tauri-action@v0.5.20
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Release作成やアップロードに必要なトークン
+        with:
+          projectPath: client-tauri # Tauriプロジェクトのパス
+          args: --target ${{ matrix.target }} --release # tauri build に渡す引数
+
+      # 5. common アーティファクトを同じ Release にアップロード
+      - name: Upload common artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.tauri.outputs.upload_url }}
+          asset_path: target/${{ matrix.target }}/release/libcommon.rlib
+          asset_name: libcommon-${{ matrix.target }}.rlib
+          asset_content_type: application/octet-stream
