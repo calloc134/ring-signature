@@ -339,26 +339,13 @@ pnpm install
 pnpm tauri dev
 ```
 
-#### 6.2.3 サーバアプリケーションの起動
+#### 6.2.3 サーバアプリケーション
 
 GUI アプリケーションは、サーバーアプリケーションと連携して動作します。
 
-まず、`server` ディレクトリに移動します。その後、sqlx CLI を使用して、データベースのマイグレーションを実行します。 PostgreSQL が起動していることを確認し、適切な接続情報を `DATABASE_URL` 環境変数に設定してマイグレーションを実行します。
+サーバアプリケーションは、既に Shuttle を利用して [https://ring-signature-0oqe.shuttle.app/](https://ring-signature-0oqe.shuttle.app/) でデプロイされています。
 
-```bash
-cd server
-DATABASE_URL=postgres://user:password@localhost/dbname sqlx database create
-DATABASE_URL=postgres://user:password@localhost/dbname sqlx migrate run
-```
-
-環境が整ったら、`server` ディレクトリ内で以下のコマンドを実行します。
-
-```bash
-DATABASE_URL=postgres://user:password@localhost/dbname cargo run
-```
-
-これで、サーバーが起動し、GUI アプリケーションと連携できるようになります。
-アプリケーションは、デフォルトで `localhost:8080` でリッスンしています。
+環境変数の `VITE_BACKEND_URL` を設定することで、サーバーアプリケーションの URL を指定できます。
 
 ### 6.3 機能
 
