@@ -39,16 +39,16 @@ jobs:
           install: |
             mingw-w64-x86_64-clang
             mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-nettle       # Nettle ライブラリ
-            mingw-w64-x86_64-zip          # zip ユーティリティ :contentReference[oaicite:0]{index=0}
+            mingw-w64-x86_64-nettle       
+            mingw-w64-x86_64-zip
 
       # macOS x86_64 用依存インストール
       - name: Install system dependencies on macOS (Intel)
         if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
         run: |
           brew update
-          brew install nettle      # Nettle ライブラリ
-          brew install pkgconf     # pkg-config 互換ツール
+          brew install nettle      
+          brew install pkgconf
 
       - name: Install system dependencies
         if: runner.os == 'Linux'
@@ -66,6 +66,12 @@ jobs:
             llvm \
             libssl-dev \
             libpq-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
 
       # 3. Windows: 共通ライブラリビルド（MSYS2 Bash で実行）
       - name: Build common library (Windows)
