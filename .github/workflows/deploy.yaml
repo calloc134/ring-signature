@@ -63,6 +63,7 @@ jobs:
         if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
         run: |
           brew update
+          brew install pkg-config
           brew install nettle      
           brew install pkgconf
 
