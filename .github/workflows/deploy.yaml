@@ -9,6 +9,9 @@ permissions:
 
 jobs:
   build:
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
+      TARGET_TRIPLE: ${{ matrix.target }}
     strategy:
       matrix:
         include:
