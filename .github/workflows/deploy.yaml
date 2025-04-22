@@ -59,14 +59,13 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
           source "$HOME/.cargo/env"
 
-      # 4. macOS x86_64 用依存インストール
-      - name: Install system dependencies on macOS (Intel)
-        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
+      # macOS (Intel) ビルドに必要なツールを MacPorts からインストール
+      - name: Install dependencies via MacPorts
+        if: matrix.os == 'macos' && matrix.target == 'x86_64-apple-darwin'
         run: |
-          brew update
-          brew reinstall pkg-config
-          brew reinstall nettle      
-          brew reinstall pkgconf
+          sudo port -v selfupdate
+          # 必要に応じて以下のパッケージを追加
+          sudo port install pkgconfig gmp nettle gnutls libffi
 
       # 5. Linux 用依存インストール
       - name: Install system dependencies on Linux
