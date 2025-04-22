@@ -71,10 +71,10 @@ jobs:
         with:
           name: linux-bundles
           path: |
-            client-tauri/target/release/client-tauri
-            client-tauri/target/release/bundle/*.deb
-            client-tauri/target/release/bundle/*.rpm
-            client-tauri/target/release/bundle/*.AppImage
+            target/release/client-tauri
+            target/release/bundle/deb/*.deb
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           overwrite: true
 
