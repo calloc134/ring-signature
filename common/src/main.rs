@@ -17,6 +17,11 @@ use sha3::Digest;
 use log::{debug, error, info};
 // dialoguer をインポート
 use dialoguer::{Input, Password, Select};
+// textplots をインポート
+use num_bigint::ToBigInt;
+use num_traits::ToPrimitive; // Import ToPrimitive trait
+use num_traits::Zero;
+use textplots::{Chart, Plot, Shape}; // Added textplots imports
 
 fn main() -> Result<()> {
     // ロガー初期化
@@ -214,8 +219,55 @@ fn main() -> Result<()> {
 
     info!("リング署名を検証中...");
     // リング署名を検証
-    let ring_sig_verify_result = ring_verify(&ring_pubs, &ring_sig, message, b)?;
+    let (ring_sig_verify_result, t_values) = ring_verify(&ring_pubs, &ring_sig, message, b)?; // Capture tuple
 
     info!("リング署名検証結果: {}", ring_sig_verify_result);
+
+    // --- 検証過程のグラフ描画 ---
+    info!("検証過程のグラフを描画中...");
+    if let Some(initial_v) = t_values.first() {
+        if initial_v.is_zero() {
+            info!("初期値vがゼロのため、グラフを描画できません。");
+        } else {
+            // BigUintをf64に変換（精度に注意）
+            // Use .to_bigint().and_then(|bi| bi.to_f64()) for safer conversion
+            let initial_v_f64 = initial_v
+                .to_bigint()
+                .and_then(|bi| bi.to_f64()) // Use ToPrimitive::to_f64
+                .unwrap_or(f64::NAN);
+
+            if initial_v_f64.is_nan() || initial_v_f64 == 0.0 {
+                info!("初期値vのf64変換に失敗したかゼロのため、グラフを描画できません。");
+            } else {
+                let points: Vec<(f32, f32)> = t_values
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, t)| {
+                        // Use .to_bigint().and_then(|bi| bi.to_f64()) for safer conversion
+                        let t_f64 = t.to_bigint().and_then(|bi| bi.to_f64()).unwrap_or(f64::NAN); // Use ToPrimitive::to_f64
+                        if t_f64.is_nan() {
+                            None
+                        } else {
+                            // 初期値vに対する割合(%)を計算
+                            let ratio_percent = (t_f64 / initial_v_f64 * 100.0) as f32;
+                            Some((i as f32, ratio_percent))
+                        }
+                    })
+                    .collect();
+
+                if points.is_empty() {
+                    info!("グラフ描画用のデータ点がありません。");
+                } else {
+                    println!("リング署名検証過程 (v={}に対する割合 %):", initial_v);
+                    Chart::new(120, 60, 0.0, points.len() as f32 - 1.0)
+                        .lineplot(&Shape::Lines(&points))
+                        .nice(); // Use nice() to automatically adjust y-axis range
+                }
+            }
+        }
+    } else {
+        info!("検証過程の値が存在しないため、グラフを描画できません。");
+    }
+
     Ok(())
 }

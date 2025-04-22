@@ -98,9 +98,10 @@ fn ring_verify(
     };
     let max_bits = pkeys.iter().map(|pk| pk.n.bits()).max().unwrap_or(0) as usize
         + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    let ok = common::ring::ring_verify(&pkeys, &sig, message.as_bytes(), max_bits)
+    // Destructure the tuple to get the boolean result
+    let (ok, _t_values) = common::ring::ring_verify(&pkeys, &sig, message.as_bytes(), max_bits)
         .map_err(|e| e.to_string())?;
-    Ok(ok)
+    Ok(ok) // Return only the boolean
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -4,7 +4,7 @@ use crate::rsa::{g, g_inverse, PublicKey, SecretKey};
 use anyhow::Result;
 use log::{debug, error, info};
 use num_bigint::{BigUint, RandBigInt};
-use num_traits::Zero;
+use num_traits::Zero; // Added ToPrimitive
 use rand::thread_rng;
 // ハッシュ関数 (SHA3-256)
 use sha3::{Digest, Sha3_256};
@@ -136,7 +136,14 @@ pub fn ring_sign(
 /// sig: 検証対象のリング署名
 /// m: 検証対象のメッセージ
 /// b: 共通ドメインのビット長
-pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) -> Result<bool> {
+/// Returns a tuple: (verification_result, intermediate_t_values)
+pub fn ring_verify(
+    ring: &[PublicKey],
+    sig: &RingSignature,
+    m: &[u8],
+    b: usize,
+) -> Result<(bool, Vec<BigUint>)> {
+    // Changed return type
     // infoには主要パラメータのみ、詳細はdebugで出力
     info!(
         "リング署名検証開始: ring_size = {}, sig.v bits = {}, sig.xs_len = {}, m_len = {}, b = {}",
@@ -157,6 +164,8 @@ pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) 
     let r = ring.len();
     // 検証計算のための中間変数 t (初期値は署名のグルー値 v)
     let mut t = sig.v.clone();
+    // Store intermediate t values, starting with v
+    let mut t_values = vec![t.clone()];
     debug!("ring_verify: initial t = {}", t);
 
     // 各リングメンバーについて検証計算を実行
@@ -170,12 +179,14 @@ pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) 
         // 対称鍵暗号 e_k を適用して次の t を計算
         t = e_k(&k, &y_xor_t, b);
         debug!("ring_verify: t[{}] = {}", i, t);
+        // Store the calculated t
+        t_values.push(t.clone());
     }
 
     // 最終的な計算結果 t が元のグルー値 v と一致するかどうかで検証
     let verification = t == sig.v;
     info!("リング署名検証結果: {}", verification);
-    Ok(verification)
+    Ok((verification, t_values)) // Return result and intermediate values
 }
 
 #[cfg(test)]
@@ -220,7 +231,8 @@ mod tests {
         // 検証用の公開鍵リスト
         let ring_pubs: Vec<PublicKey> = ring.iter().map(|kp| kp.public.clone()).collect();
         // 署名検証
-        assert!(ring_verify(&ring_pubs, &ring_sig, message, b)?);
+        let (verified, _) = ring_verify(&ring_pubs, &ring_sig, message, b)?; // Capture tuple
+        assert!(verified); // Assert only the boolean result
         Ok(())
     }
 
@@ -251,7 +263,8 @@ mod tests {
         // 異なるメッセージで検証
         let wrong_message = b"Wrong Ring Signature Test";
         // 検証が失敗することを確認
-        assert!(!ring_verify(&ring_pubs, &ring_sig, wrong_message, b)?);
+        let (verified, _) = ring_verify(&ring_pubs, &ring_sig, wrong_message, b)?; // Capture tuple
+        assert!(!verified); // Assert only the boolean result
         Ok(())
     }
 
@@ -337,8 +350,9 @@ mod tests {
                 b,
             )?;
             // 署名検証
+            let (verified, _) = ring_verify(&ring_pubs, &ring_sig, message, b)?; // Capture tuple
             assert!(
-                ring_verify(&ring_pubs, &ring_sig, message, b)?,
+                verified, // Assert only the boolean result
                 "Verification failed for signer {}",
                 signer_index
             );
