@@ -66,15 +66,49 @@ jobs:
         working-directory: client-tauri
         run: pnpm tauri build
 
+      - name: Stage & Rename Linux Bundles
+        run: |
+          mkdir -p linux-bundles
+          echo "Staging artifacts with name pattern: <base>-${TAG_NAME}-${TARGET_TRIPLE}.ext"
+
+          # コピー＆リネーム対象をループ
+          for file in \
+            target/release/common \
+            target/release/bundle/deb/*.deb \
+            target/release/bundle/rpm/*.rpm \
+            target/release/bundle/appimage/*.AppImage
+          do
+            # 存在チェック
+            if [ ! -e "$file" ]; then
+              echo "  Skipping (not found): $file"
+              continue
+            fi
+
+            filename=$(basename "$file")
+            extension="${filename##*.}"       # ex: deb, rpm, AppImage, （バイナリは拡張子なし）
+            base_name="${filename%.*}"        # ex: client-tauri, foo, bar
+
+            # 拡張子が存在しない（バイナリ本体）は空文字扱い
+            if [ "$base_name" = "$filename" ]; then
+              extension=""
+            fi
+
+            # 新しいファイル名を構築
+            if [ -n "$extension" ]; then
+              new_name="${base_name}-${TAG_NAME}-${TARGET_TRIPLE}.${extension}"
+            else
+              new_name="${base_name}-${TAG_NAME}-${TARGET_TRIPLE}"
+            fi
+
+            echo "  Copying $file → linux-bundles/${new_name}"
+            cp "$file" "linux-bundles/${new_name}"
+          done
+
       - name: Upload Linux Bundles
         uses: actions/upload-artifact@v4
         with:
           name: linux-bundles
-          path: |
-            target/release/client-tauri
-            target/release/bundle/deb/*.deb
-            target/release/bundle/rpm/*.rpm
-            target/release/bundle/appimage/*.AppImage
+          path: linux-bundles
           if-no-files-found: error
           overwrite: true
 
