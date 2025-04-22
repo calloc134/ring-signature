@@ -55,6 +55,7 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
+          cache-dependency-path: client-tauri/pnpm-lock.yaml
 
       - name: Build Tauri App
         working-directory: client-tauri
