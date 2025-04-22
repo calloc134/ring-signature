@@ -63,7 +63,7 @@ jobs:
 
       - name: Build Tauri App
         working-directory: client-tauri
-        run: pnpm run tauri build -- --release
+        run: pnpm tauri build -- --release
 
       - name: Archive bundles
         run: |
