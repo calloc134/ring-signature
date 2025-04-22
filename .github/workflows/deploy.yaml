@@ -46,9 +46,18 @@ jobs:
       - name: Build common library
         run: cargo build --release  -p common
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18.x"
+
+      - name: Install client dependencies
+        working-directory: client-tauri
+        run: npm ci
+
       - name: Build Tauri App
         working-directory: client-tauri
-        run: pnpm tauri build --release
+        run: npm run tauri build --release
 
       - name: Archive bundles
         run: |
