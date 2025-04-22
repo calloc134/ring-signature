@@ -4,6 +4,10 @@ marp: true
 
 # RSA を用いたリング署名の簡易的実装
 
+<p align="center">
+  <img src="images/top.gif" alt="Top GIF">
+</p>
+
 ---
 
 ## 1. リング署名とは？
@@ -19,12 +23,12 @@ marp: true
 
 ### 1.2 特徴
 
-- グループ内のメンバーの協力を得る必要はない
+- **匿名性**: 署名者を特定できない
+- **自発性**: グループ内のメンバーの協力を得る必要はない
   - 署名者自身の秘密鍵と、他のメンバーの公開鍵だけで署名可能
     公開されている第三者の公開鍵をいくつか準備すれば良い
 - 2001 年に 論文「How to Leak a Secret」として発表された
   - https://www.iacr.org/archive/asiacrypt2001/22480554.pdf
-- 後発の研究でさらなる高速化が検討
 - Monero に代表される秘匿性の高い一部の暗号通貨で採用
 
 ---
@@ -34,6 +38,7 @@ marp: true
 - 論文を元にプログラミング言語 Rust でリング署名を実装
   - 情報セキュリティで学習した RSA 署名をベースとして設計
   - 内部で対称鍵暗号(ストリーム暗号) ChaCha20 を使用
+- **注意:** 学習目的のサンプル。実際のセキュリティ用途非推奨。
 
 ---
 
@@ -198,132 +203,143 @@ $g_i$ および $g_i^{-1}$ の定義域は、通常の RSA における法 $n_i$
 
 ---
 
-## 3. コードの概要
+## 3. プロジェクト構造
 
-- RSA を用いた、通常署名・リング署名の生成・検証を実現
-- プログラミング言語 Rust を用いて実装
-
----
-
-### 3.1 主要な機能
-
-- 主要な機能:
-  - 対称鍵暗号関数 e_k / d_k (ChaCha20 を採用)
-  - 拡張 RSA トラップドア関数 g / g_inverse
-  - RSA 署名生成・検証関数
-  - リング署名生成・検証関数
+- `common/`: コア暗号ロジック
+  - 対称鍵暗号、RSA、リング署名の実装
+- `server/`: バックエンド API (Shuttle でデプロイ)
+- `client-tauri/`: GUI アプリケーション (Tauri)
+- `keys/`: サンプル鍵ファイル (PEM, PGP/ASC)
+- `images/`: README やスライド用画像
+- `scripts/`: 鍵生成スクリプト
 
 ---
 
-### 3.2 実行の流れ (1/4)
+## 4. コードの概要
 
-- main 関数の流れ:
+### 主要なモジュール (`common` クレート内)
 
-  1. 乱数生成器を用いて RSA 鍵ペアを生成
-  2. 各鍵ペアの RSA 署名を生成し、検証するテストを実施
-  3. 複数の鍵ペアを用いてリング署名を生成し、リング全体で署名検証を確認
+- `crypto_utils`: 対称鍵暗号 (ChaCha20) 関連
+- `rsa`: RSA 署名、拡張 RSA 関数
+- `ring`: リング署名の生成・検証
+- `utils`: ユーティリティ関数 (BigUint 変換など)
 
-- 出力例（実行時）:
-  - 個々の鍵ペア情報の表示
-  - RSA 署名とその検証結果の表示
-  - リング署名のグルー値や各 x_i の値の表示
-  - リング署名検証の最終結果
+### 主要機能
+
+- 対称鍵暗号関数 `e_k` / `d_k`
+- 拡張 RSA トラップドア関数 `g` / `g_inverse`
+- リング署名生成・検証関数 `ring_sign` / `ring_verify`
 
 ---
 
-### 3.2 実行の流れ (2/4)
+## 5. 使い方 (CLI)
 
-```rust
-fn main() {
-    // 鍵ペアの生成と表示
-    for (i, keypair) in keypair_vec.iter().enumerate() {
-        println!("鍵ペア {}: {:?}", i, keypair);
-    }
+### 5.1 鍵の準備
 
-    // RSA署名生成・検証
-    let signature = rsa_sign(&keypair_vec[0], &m, b);
-    println!("署名: {}", signature);
+- **PEM 形式:** `bash generate_pem_keys.sh`
+- **PGP/GPG 形式:** `bash generate_pgp_keys.sh`
+  - `keys/` ディレクトリに鍵が生成される
 
-    let rsa_verify_result = rsa_verify(&keypair_vec[0].public, &m, &signature, b);
-    println!("通常RSA署名検証結果: {}", rsa_verify_result);
+### 5.2 プログラムの実行
 
-    // リング署名生成・検証
-    let ring_sig = ring_sign(&keypair_vec, 0, message, b);
-    println!("リング署名のグルー値v: {}", ring_sig.v);
+- **ビルド済みバイナリ:** Releases からダウンロード
+- **ソースから:** `common` ディレクトリで `cargo run`
+  - プロンプトに従い、鍵形式とファイルパスを入力
 
-    let ring_sig_verify_result = ring_verify(&ring_pubs, &ring_sig, message, b);
-    println!("リング署名検証結果: {}", ring_sig_verify_result);
-}
+---
+
+### 5.3 CLI 実行例
+
+```
+鍵ファイル形式を選択: pem
+署名者秘密鍵ファイルパス: keys/signer_private.pem
+... (公開鍵ファイルパス入力) ...
+[INFO] 鍵の読み込み完了。
+[INFO] メッセージ: Hello RSA and Ring Signature!
+[INFO] RSAでメッセージに署名中...
+[INFO] RSA署名検証結果: true
+[INFO] リング署名を生成中... ring_size = 3, signer = 0
+[INFO] リング署名生成完了: v bits = ..., xs_len = 3
+[INFO] リング署名を検証中...
+[INFO] リング署名検証結果: true
 ```
 
 ---
 
-### 3.2 実行の流れ (3/4)
+## 6. 使い方 (GUI)
 
-<img src="./images/carbon(3).png" height="550"/>
+### 6.1 概要
 
----
-
-### 3.2 実行の流れ (4/4)
-
-![実行結果](<./images/carbon(4).png>)
-
----
-
-### 3.3 コードの構成 (1/8)
-
-- **定数定義**:
-  - `E`: 公開指数
-    - RSA 暗号で一般的に使用される値 65537
-  - `COMMON_DOMAIN_BIT_LENGTH_ADDITION`: 共通定義域のビット長に追加するビット数。
-    - 署名生成時にランダムに選ばれる値が n より大きくなる可能性があるため
-      鍵のビット長に定数を加算したビット長を定義域として採用。
-  - `FIXED_NONCE`: ChaCha20 で使用する固定ノンス
+- Tauri を使用した GUI アプリケーション (`client-tauri`)
+- Keybase の PGP 鍵を使用
+- メッセージと複数の Keybase ユーザ ID を入力してリング署名を生成・検証
+- バックエンドサーバ (`server` クレート) と連携
 
 ---
 
-### 3.3 コードの構成 (2/8)
+### 6.2 実行手順
 
-- **構造体定義**:
-  - `PublicKey`: RSA 公開鍵
-    - モジュラス `n` と公開指数 `e` を含む
-  - `SecretKey`: RSA 秘密鍵
-    - 秘密指数 `d` とモジュラス `n` を含む
-  - `KeyPair`: RSA 鍵ペア
-    - 公開鍵と秘密鍵をペアで保持
-  - `RingSignature`: リング署名
-    - グルー値 `v` と各メンバーの寄与 `xs` を含む
-
----
-
-### 3.3 コードの構成 (3/8)
-
-- **利用する外部クレート**:
-  - `num_bigint`: 大きい整数の計算
-  - `num_integer`: 整数関連のユーティリティ
-    - 拡張ユークリッド互除法の計算など
-  - `num_traits`: 数値型に関するトレイト
-  - `chacha20`: ChaCha20 ストリーム暗号の実装
-  - `rand`: 乱数生成
-  - `sha3`: SHA-3 ハッシュ関数
-  - `num_prime`: 素数の生成と判定
+1. **Keybase 鍵の準備:**
+   - `keybase pgp gen` で鍵生成
+   - Keybase から秘密鍵をエクスポートしてダウンロード
+     ![Keybase 鍵のエクスポート](./images/keybase-generate-key1.png)
+2. **GUI アプリケーションの起動:**
+   - ビルド済みバイナリ: AppImage を実行
+   - ソースから: `cd client-tauri && pnpm install && pnpm tauri dev`
+3. **サーバ:** デプロイ済み ([https://ring-signature-0oqe.shuttle.app/](https://ring-signature-0oqe.shuttle.app/)) を利用
 
 ---
 
-## 4. テストと検証について
+### 6.3 機能: リング署名の生成
 
-- ユニットテストを多数実装し、以下の観点から各関数の正当性を確認
+![GUI アプリケーションの起動画面](./images/gui1.png)
 
-* **暗号化/復号:** 対称暗号の正当性
-* **RSA 署名:** 成功/失敗ケース
-* **リング署名:** 成功/失敗、空リング
-* **`g`関数, `g_inverse`関数:** 正当性、ゼロ、境界値
-* **数論関数:** 素数生成、モジュラ逆数、拡張ユークリッド互除法
-* **境界値/エラー:** 各種関数の境界値、エラー処理
+- 秘密鍵ファイル、パスフレーズ (必要時) を指定
+- メッセージを入力
+- リングメンバーの Keybase ユーザ ID を追加 (署名者を指定)
+- "Generate Signature" ボタンで生成
 
 ---
 
-## 5. まとめ
+### 6.3 機能: リング署名の検証
 
-今回の実装では、授業で学習した RSA 署名の仕組みを元に、応用としてリング署名の実装を行った。かねてから存在を知っていたリング署名について、実際に論文を読みながら実装を行うことで、ある程度仕組みについて理解が深めることができたように思う。
-今後の展望として、RSA ではなく他の暗号方式を用いたリング署名の実装や、実際のアプリケーションへの応用を考えていきたい。
+![GUI アプリケーションのリング署名検証画面](./images/gui3.png)
+
+- Keybase ユーザ ID を入力すると、関連する署名一覧を表示
+- "Verify" ボタンで選択した署名を検証
+- 検証結果は有効/無効のメッセージとして表示
+
+![GUI アプリケーションのリング署名検証結果画面](./images/gui5.png)
+
+---
+
+## 7. テスト
+
+各モジュールにユニットテストを実装 (`cargo test` で実行)
+
+- **`crypto_utils`**: 対称鍵暗号の一貫性テスト
+- **`rsa`**:
+  - RSA 署名/検証の正当性確認
+  - 拡張 RSA 関数の相互逆元関係テスト
+  - 境界値テスト (0, n 付近, n 倍数)
+- **`ring`**:
+  - リング署名/検証の成功・失敗ケース
+  - エラーハンドリング (空リング、無効なインデックス)
+
+---
+
+## 8. まとめと今後の展望
+
+- RSA ベースのリング署名を Rust で実装し、その仕組みを理解
+- CLI, GUI, サーバ のコンポーネント構築
+- **今後の展望:**
+  - 他の暗号方式 (例: EdDSA) ベースのリング署名
+  - 機能拡張 (GUI, API)
+  - 応用例の検討
+
+---
+
+## 9. 参考文献
+
+- Rivest, R. L., Shamir, A., & Tauman, Y. (2001). How to leak a secret. In _Advances in Cryptology—ASIACRYPT 2001_ (pp. 552-565). Springer Berlin Heidelberg.
+  - [https://www.iacr.org/archive/asiacrypt2001/22480554.pdf](https://www.iacr.org/archive/asiacrypt2001/22480554.pdf)
