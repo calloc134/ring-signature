@@ -39,7 +39,6 @@ jobs:
             libxapp-dev \
             desktop-file-utils \
             appstream \
-            gdk-pixbuf2.0-utils
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
