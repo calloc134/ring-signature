@@ -246,7 +246,16 @@ bash generate_pgp_keys.sh
 
 ### 5.2 プログラムの実行
 
-`common` ディレクトリ内で以下のコマンドを実行します。
+ビルド済みのバイナリは、[https://github.com/calloc134/ring-signature/releases](https://github.com/calloc134/ring-signature/releases) からダウンロードできます。
+
+バイナリをダウンロードして実行する場合は、以下のコマンドを実行します。
+
+```bash
+chmod +x ./common-tagname-x86_64-unknown-linux-gnu
+./common-tagname-x86_64-unknown-linux-gnu
+```
+
+ソースから実行する場合、`common` ディレクトリ内で以下のコマンドを実行します。
 
 ```bash
 cargo run
@@ -325,7 +334,16 @@ keybase pgp gen
 
 #### 6.2.2 GUI アプリケーションの起動
 
-`client-tauri` ディレクトリに移動し、必要な依存関係をインストールします。
+ビルド済みのバイナリは、[https://github.com/calloc134/ring-signature/releases](https://github.com/calloc134/ring-signature/releases) からダウンロードできます。
+
+バイナリをダウンロードして実行する場合は、以下のコマンドを実行します。
+
+```bash
+chmod +x ./client-tauri_0.1.0_amd64-tagname-x86_64-unknown-linux-gnu.AppImage
+./client-tauri_0.1.0_amd64-tagname-x86_64-unknown-linux-gnu.AppImage
+```
+
+ソースから実行する場合、`client-tauri` ディレクトリに移動し、必要な依存関係をインストールします。
 
 ```bash
 cd client-tauri
