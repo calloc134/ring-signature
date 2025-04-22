@@ -35,7 +35,11 @@ jobs:
             llvm \
             libssl-dev \
             libpq-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            libxapp-dev \
+            desktop-file-utils \
+            appstream \
+            gdk-pixbuf2.0-utils
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
