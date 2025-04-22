@@ -25,11 +25,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # 1. リポジトリをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # MSYS2 環境構築
+      # Windows: MSYS2 環境構築
       - name: Setup MSYS2 on Windows
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -37,21 +36,18 @@ jobs:
           update: true
           msystem: MINGW64
           install: |
-            base-devel
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-clang
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-nettle
 
-      # 既存 Rustup を削除して新規インストールに強制
+      # Windows: Rustup 再インストール
       - name: Clean existing Rustup
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          rm -rf /home/runneradmin/.cargo
-          rm -rf /home/runneradmin/.rustup
+          rm -rf $HOME/.cargo $HOME/.rustup
 
-      # MSYS2 内で Rust を新規インストール
       - name: Install Rust in MSYS2
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -59,14 +55,14 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
           source "$HOME/.cargo/env"
 
-      # 4. macOS x86_64 用依存インストール
-      - name: Install system dependencies on macOS (Intel)
+      # macOS (Intel): Homebrew で nettle インストール
+      - name: Install dependencies on macOS (Intel)
         if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
         run: |
           brew update
-          brew reinstall nettle pkgconf
+          brew install nettle pkg-config-wrapper
 
-      # クロス用ラッパーの生成（Linux/macOS）
+      # 共有: pkg-config ラッパー生成
       - name: Generate pkg-config wrapper
         if: runner.os != 'Windows'
         run: |
@@ -81,26 +77,15 @@ jobs:
           EOF
           chmod +x ./target-pkg-config
 
-      # 5. Linux 用依存インストール
-      - name: Install system dependencies on Linux
+      # Linux: apt で nettle-dev 等をインストール
+      - name: Install dependencies on Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            nettle-dev \
-            libglib2.0-dev \
-            libgtk-3-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libwebkit2gtk-4.1-dev \
-            libsoup-3.0-dev \
-            clang \
-            llvm \
-            libssl-dev \
-            libpq-dev
+          sudo apt-get install -y pkg-config nettle-dev libssl-dev libpq-dev clang llvm
 
-      # 6. Rust ツールチェーンセットアップ (非 Windows)
-      - name: Setup Rust toolchain for non-Windows
+      # Rustup & ターゲット追加 (Linux/macOS)
+      - name: Setup Rust toolchain
         if: runner.os != 'Windows'
         uses: actions-rs/toolchain@v1
         with:
@@ -108,7 +93,7 @@ jobs:
           components: rustfmt
           target: ${{ matrix.target }}
 
-      # 7. Windows: 共通ライブラリビルド（MSYS2 Bash）
+      # 共通ライブラリビルド (Windows)
       - name: Build common library (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -117,14 +102,14 @@ jobs:
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
           cargo build --release --target ${{ matrix.target }} -p common
 
-      # 8. Linux/macOS: 共通ライブラリビルド
+      # 共通ライブラリビルド (Linux/macOS)
       - name: Build common library (Linux/macOS)
         if: runner.os != 'Windows'
         env:
           PKG_CONFIG: ${{ github.workspace }}/target-pkg-config
         run: cargo build --release --target ${{ matrix.target }} -p common
 
-      # 9. Windows: Tauri アプリビルド（MSYS2 Bash）
+      # Tauri アプリビルド (Windows)
       - name: Build Tauri App (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -134,14 +119,16 @@ jobs:
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
           cargo tauri build --release --target ${{ matrix.target }}
 
-      # 10. Linux/macOS: Tauri アプリビルド
+      # Tauri アプリビルド (Linux/macOS)
       - name: Build Tauri App (Linux/macOS)
         if: runner.os != 'Windows'
+        env:
+          PKG_CONFIG: ${{ github.workspace }}/target-pkg-config
         run: |
           cd client-tauri
           cargo tauri build --release --target ${{ matrix.target }}
 
-      # 11. バンドルを ZIP 化してリリースへアップロード
+      # ZIP 化してリリースへアップロード
       - name: Archive bundles
         run: |
           zip -r release-${{ matrix.target }}.zip \
