@@ -61,7 +61,8 @@ jobs:
 
       # macOS (Intel) ビルドに必要なツールを MacPorts からインストール
       - name: Install dependencies via MacPorts
-        if: matrix.os == 'macos' && matrix.target == 'x86_64-apple-darwin'
+        if: runner.os == 'macOS' && matrix.target == 'x86_64-apple-darwin'
+
         run: |
           sudo port -v selfupdate
           # 必要に応じて以下のパッケージを追加
