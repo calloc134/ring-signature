@@ -53,7 +53,7 @@ jobs:
 
       - name: Install client dependencies
         working-directory: client-tauri
-        run: npm ci
+        run: npm install
 
       - name: Build Tauri App
         working-directory: client-tauri
