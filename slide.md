@@ -4,14 +4,11 @@ marp: true
 
 # RSA を用いたリング署名の簡易的実装
 
-<p align="center">
-  <img src="images/top.gif" alt="Top GIF">
-</p>
-
 ---
 
 ## 目次
 
+0. 前提
 1. 何を作ったのか
 2. なぜ作ったのか
 3. どのように作ったのか
@@ -23,13 +20,22 @@ marp: true
 
 ---
 
+## 0. 前提
+
+リング署名とは
+
+- 複数の公開鍵のうち、誰かが署名したことを証明
+- 具体的に「誰が」署名したかはわからない
+- RSA などの公開鍵暗号を基盤とした応用技術
+- 理論は後ほど解説
+
+---
+
 ## 1. 何を作ったのか
 
 **リング署名の生成・検証をするアプリケーション**
 
-<p align="center">
-  <img src="images/demo.gif" alt="Demo GIF" width="70%">
-</p>
+![bg left:50% contain](images/top.gif)
 
 - CLI 版と GUI 版を実装
 - Keybase のユーザー鍵と連携して動作
@@ -57,18 +63,21 @@ marp: true
 
 ### 1.2 機能概要: GUI 版
 
-<div style="display: flex; justify-content: space-between;">
+<!-- <div style="display: flex; justify-content: space-between;">
   <div style="flex: 1;">
     <img src="images/gui1.png" alt="GUI署名生成画面" width="95%">
   </div>
   <div style="flex: 1;">
     <img src="images/gui3.png" alt="GUI署名検証画面" width="95%">
   </div>
-</div>
+</div> -->
+
+![bg left:50% auto](images/gui2.png)
 
 - Keybase ユーザー鍵との連携
 - シンプルで直感的な UI
-- バックエンドサーバーとの通信による処理
+- バックエンドサーバーとの
+  通信による処理
 
 ---
 
@@ -77,20 +86,20 @@ marp: true
 **匿名性と信頼性の両立**
 
 - 内部告発や匿名投票など、身元を隠しつつ信頼性を担保する場面での活用
-- 「この特定のグループの誰かが発言している」ということだけを証明
+- 「この特定のグループの誰かが確かに発言した」ということだけを証明
 - Keybase との連携により身近なユースケースを実現
 
-> 例: 企業の役員会の誰かが内部告発をしたい場合、「役員の誰か」という情報は公開しつつ、具体的に誰かは秘匿できる
+> 例: 企業の役員会の誰かが内部告発をしたい場合、
+> 「役員の誰か」という情報は公開しつつ、具体的に誰かは秘匿できる
 
 ---
 
 ### 2.1 既存技術と本実装の位置付け
 
-- リング署名は Monero など一部の暗号通貨で採用されているが一般アプリケーションでは普及していない
-- Web3.0 時代の匿名性担保技術として再評価の余地がある
-- 実用的なツールとして Keybase の PGP 鍵エコシステムと連携することで敷居を下げる
-
-> リング署名は Zero Knowledge Proof など他のプライバシー技術と比べて実装がシンプルで理解しやすい
+- リング署名は Monero など一部の暗号通貨で採用されているが
+  一般アプリケーションでは普及していない
+- 実用的なツールとして
+  Keybase の PGP 鍵エコシステムと連携することで敷居を下げる
 
 ---
 
@@ -112,12 +121,8 @@ marp: true
 ```rust
 // リング署名生成の核となる部分
 pub fn ring_sign(
-    message: &[u8],
-    ring: &[RsaPublicKey],
-    signer_idx: usize,
-    signer_key: &RsaPrivateKey,
-    b: usize,
-) -> Result<RingSignature, RingError> {
+  ...
+) -> Result<RingSignature> {
     // 1. 初期チェック
     // 2. ハッシュ値（対称鍵）の生成
     // 3. グルー値vのランダム生成
@@ -190,6 +195,7 @@ pub fn ring_sign(
 
 1. 各 $x_i$ から $y_i = g_i(x_i)$ を計算
 2. 結合関数 $C_{k,v}(y_1,...,y_r)$ の値が $v$ と一致するか確認
+3. 一致すれば署名は有効
 
 ---
 
@@ -208,16 +214,17 @@ pub fn ring_sign(
 
 ---
 
-### 5.2 UX/インテグレーションの工夫
+### 5.2 UX の観点からの新規性
 
 3. **Keybase との連携:**
 
    - 既存の PGP 鍵エコシステムと接続
    - ユーザー ID からの公開鍵取得を自動化
+   - より想定しやすいユースケースを実現
 
 4. **直感的な UI 設計:**
    - 複雑な暗号技術をシンプルに操作可能
-   - リング署名の生成・検証プロセスを視覚化
+   - リング署名の生成・検証の操作を視覚化
 
 ---
 
@@ -227,21 +234,11 @@ pub fn ring_sign(
 
 - 論文の数学的表現をコードに落とし込む難しさ
   - 特に拡張 RSA 関数の実装
-  - BigInteger の適切な処理
-
-```rust
-// 拡張RSAトラップドア関数の実装部分
-pub fn g(x: &BigUint, pubkey: &RsaPublicKey, b: usize) -> BigUint {
-    // x = q*n + r の分解
-    let n = pubkey.n();
-    let q = x / n;
-    let r = x % n;
-
-    // g(x) = q*n + r^e mod n
-    let y = r.modpow(pubkey.e(), n);
-    q * n + y
-}
-```
+  - 数学的な理論を理解する必要があった
+- コード品質の向上
+  - コード分割
+  - テストの充実
+  - ロギング
 
 ---
 
@@ -253,16 +250,9 @@ pub fn g(x: &BigUint, pubkey: &RsaPublicKey, b: usize) -> BigUint {
   - 結合関数内での適切な利用方法
 
 - **PGP 鍵の読み込み:**
-  - Rust の`pgp`クレート利用に 2 日を要する
+  - Rust の`sequoia-openpgp`クレートの使い方が難解
+  - 既存のコード・内部実装を読んでなんとか理解
   - 鍵データ構造の解析と変換の複雑さ
-
-```rust
-// PGP鍵からRSA鍵への変換部分（特に苦労した）
-fn extract_rsa_from_pgp(key_data: &[u8], passphrase: Option<&str>)
-    -> Result<RsaPrivateKey> {
-    // ...複雑な鍵変換ロジック...
-}
-```
 
 ---
 
@@ -270,18 +260,13 @@ fn extract_rsa_from_pgp(key_data: &[u8], passphrase: Option<&str>)
 
 改良・拡張したい点:
 
-1. **他の暗号方式ベースの実装:**
-
-   - EdDSA などの楕円曲線暗号をベースとしたリング署名
-   - より効率的なアルゴリズムの探求
-
-2. **機能拡張:**
+1. **機能拡張:**
 
    - GUI の多言語対応
    - API 機能の強化（Web アプリケーションへの組み込み）
    - モバイルアプリ対応
 
-3. **応用例の開発:**
+2. **応用例のバリエーション:**
    - 匿名投票システム
    - 内部告発プラットフォーム
    - プライバシー保護型 SNS
