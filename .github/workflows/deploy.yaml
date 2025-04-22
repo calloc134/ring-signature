@@ -9,9 +9,6 @@ permissions:
 
 jobs:
   build:
-    env:
-      TAG_NAME: ${{ github.event.release.tag_name }}
-      TARGET_TRIPLE: ${{ matrix.target }}
     strategy:
       matrix:
         include:
@@ -71,6 +68,8 @@ jobs:
 
       - name: Stage & Rename Linux Bundles
         run: |
+          TAG_NAME="${{ github.event.release.tag_name }}" 
+          TARGET_TRIPLE="${{ matrix.target }}"
           mkdir -p linux-bundles
           echo "Staging artifacts with name pattern: <base>-${TAG_NAME}-${TARGET_TRIPLE}.ext"
 
