@@ -34,7 +34,8 @@ jobs:
             clang \
             llvm \
             libssl-dev \
-            libpq-dev
+            libpq-dev \
+            librsvg2-dev
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
