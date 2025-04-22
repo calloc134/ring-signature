@@ -57,6 +57,10 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: client-tauri/pnpm-lock.yaml
 
+      - name: Install client-tauri dependencies
+        working-directory: client-tauri
+        run: pnpm install
+
       - name: Build Tauri App
         working-directory: client-tauri
         run: pnpm run tauri build --release
