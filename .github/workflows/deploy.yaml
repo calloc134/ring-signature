@@ -27,9 +27,7 @@ jobs:
             pkg-config \
             nettle-dev \
             libglib2.0-dev \
-            libgtk-3-dev \
             libjavascriptcoregtk-4.1-dev \
-            libwebkit2gtk-4.1-dev \
             libsoup-3.0-dev \
             clang \
             llvm \
@@ -68,7 +66,7 @@ jobs:
 
       - name: Build Tauri App
         working-directory: client-tauri
-        run: pnpm tauri build
+        run: pnpm tauri build -- --release --target ${{ matrix.target }}
 
       - name: Stage & Rename Linux Bundles
         run: |
