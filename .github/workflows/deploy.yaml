@@ -44,20 +44,21 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Build common library
-        run: cargo build --release  -p common
+        run: cargo build --release -p common
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8.15.6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "18.x"
-
-      - name: Install client dependencies
-        working-directory: client-tauri
-        run: npm install
+          node-version: "20"
+          cache: "pnpm"
 
       - name: Build Tauri App
         working-directory: client-tauri
-        run: npm run tauri build --release
+        run: pnpm run tauri build --release
 
       - name: Archive bundles
         run: |
