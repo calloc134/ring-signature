@@ -5,8 +5,12 @@ use common::{
     models::CliSignaturePayload,
     ring::{ring_sign, ring_verify, RingSignature},
     rsa::{
-        load_keypair_from_pgp, load_public_key_from_pem, load_public_key_from_pgp,
-        load_secret_key_from_pem, PublicKey, SecretKey,
+        load_keypair_from_pgp,
+        load_public_key_from_pem,
+        load_public_key_from_pgp,
+        load_secret_key_from_pem, // Import KeyPair
+        PublicKey,
+        SecretKey,
     },
     serialization::{biguint_to_hex, hex_to_biguint},
 };
@@ -16,7 +20,9 @@ use num_bigint::BigUint;
 use log::{debug, error, info};
 // CLI interaction
 use dialoguer::{Confirm, Input, Password, Select};
+use std::fs; // Import the fs module for file writing and reading
 use std::io::{stdin, Read};
+use std::path::Path; // Import Path for file existence check
 
 fn main() -> Result<()> {
     // Initialize logger
@@ -53,17 +59,6 @@ fn handle_sign() -> Result<()> {
     let fmt = formats[fmt_idx];
 
     // --- Load Signer Keys ---
-    let signer_pub_path: String = Input::<String>::new()
-        .with_prompt("Signer PUBLIC key file path")
-        .default(
-            match fmt {
-                "pem" => "keys/signer_public.pem",
-                _ => "keys/signer_public.asc", // PGP public key can often be separate
-            }
-            .to_string(),
-        )
-        .interact_text()?;
-
     let signer_priv_path: String = Input::<String>::new()
         .with_prompt("Signer PRIVATE key file path")
         .default(
@@ -75,20 +70,32 @@ fn handle_sign() -> Result<()> {
         )
         .interact_text()?;
 
-    let password = if fmt == "asc" {
-        Some(
+    let (signer_public_key, signer_secret_key) = if fmt == "pem" {
+        // PEM: Load public and private keys from separate files
+        let signer_pub_path: String = Input::<String>::new()
+            .with_prompt("Signer PUBLIC key file path")
+            .default("keys/signer_public.pem".to_string())
+            .interact_text()?;
+
+        info!("Loading PEM signer keys...");
+        let secret = load_secret_key(fmt, &signer_priv_path, None)?;
+        let public = load_public_key(fmt, &signer_pub_path, None)?;
+        (public, secret)
+    } else {
+        // ASC: Load keypair from the private key file, prompt for password
+        let password = Some(
             Password::new()
                 .with_prompt("Signer private key password (if any)")
                 .allow_empty_password(true) // Allow empty for unencrypted keys
                 .interact()?,
-        )
-    } else {
-        None
-    };
+        );
 
-    info!("Loading signer keys...");
-    let signer_public_key = load_public_key(fmt, &signer_pub_path, None)?;
-    let signer_secret_key = load_secret_key(fmt, &signer_priv_path, password.as_deref())?;
+        info!("Loading ASC signer keypair...");
+        // Use a helper or directly call load_keypair_from_pgp
+        let keypair = load_keypair_from_pgp(&signer_priv_path, password.as_deref())
+            .with_context(|| format!("Failed to load PGP keypair from '{}'", signer_priv_path))?;
+        (keypair.public, keypair.secret)
+    };
 
     // Verify modulus match
     if signer_public_key.n != signer_secret_key.n {
@@ -206,6 +213,24 @@ fn handle_sign() -> Result<()> {
     println!("{}", json_output);
     println!("--- End of Signature ---");
 
+    // --- Optionally Save to File ---
+    let save_to_file = Confirm::new()
+        .with_prompt("Save signature to a file?")
+        .default(false)
+        .interact()?;
+
+    if save_to_file {
+        let output_path: String = Input::<String>::new()
+            .with_prompt("Enter output filename")
+            .default("signature.json".to_string())
+            .interact_text()?;
+
+        info!("Saving signature to file: {}", output_path);
+        fs::write(&output_path, &json_output)
+            .with_context(|| format!("Failed to write signature to file '{}'", output_path))?;
+        info!("Signature successfully saved to {}", output_path);
+    }
+
     Ok(())
 }
 
@@ -213,12 +238,42 @@ fn handle_sign() -> Result<()> {
 fn handle_verify() -> Result<()> {
     info!("--- Verify Mode ---");
 
+    // --- Select Signature Input Method ---
+    let input_methods = &["Read from file", "Paste from stdin"];
+    let input_method_idx = Select::new()
+        .with_prompt("How to provide the signature JSON?")
+        .items(input_methods)
+        .default(0)
+        .interact()?;
+
     // --- Get Signature JSON Input ---
-    println!("Paste the signature JSON below and press Ctrl+D (Unix) or Ctrl+Z then Enter (Windows) when done:");
-    let mut json_input_str = String::new();
-    stdin()
-        .read_to_string(&mut json_input_str)
-        .context("Failed to read signature JSON from stdin")?;
+    let json_input_str = match input_methods[input_method_idx] {
+        "Read from file" => {
+            let input_path: String = Input::<String>::new()
+                .with_prompt("Enter signature JSON file path")
+                .default("signature.json".to_string())
+                .validate_with(|input: &String| -> Result<(), &str> {
+                    if Path::new(input).exists() {
+                        Ok(())
+                    } else {
+                        Err("File does not exist")
+                    }
+                })
+                .interact_text()?;
+            info!("Reading signature from file: {}", input_path);
+            fs::read_to_string(&input_path)
+                .with_context(|| format!("Failed to read signature file '{}'", input_path))?
+        }
+        "Paste from stdin" => {
+            println!("Paste the signature JSON below and press Ctrl+D (Unix) or Ctrl+Z then Enter (Windows) when done:");
+            let mut buffer = String::new();
+            stdin()
+                .read_to_string(&mut buffer)
+                .context("Failed to read signature JSON from stdin")?;
+            buffer
+        }
+        _ => unreachable!(),
+    };
 
     info!("Parsing signature JSON...");
     let signature_payload: CliSignaturePayload =
