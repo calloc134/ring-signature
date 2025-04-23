@@ -1,10 +1,18 @@
 use crate::db::{get_signatures_for_user, insert_signature, CreateSignatureRequest};
 use crate::models::{CreateSignatureDto, CreateSignatureResponse, SignatureRecordDto};
+use crate::utils::get_public_keys_for_users; // Import from utils
 use axum::{
     extract::{Extension, Path},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
+};
+// Common crate imports for verification
+use common::{
+    constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION,
+    ring::{ring_verify, RingSignature},
+    rsa::PublicKey, // Assuming PublicKey is accessible
+    serialization::hex_to_biguint,
 };
 use num_bigint::BigUint;
 use sqlx::PgPool;
@@ -19,28 +27,102 @@ async fn create_signature(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<CreateSignatureDto>,
 ) -> Result<Json<CreateSignatureResponse>, (StatusCode, String)> {
-    // parse provided v and xs as hex and re-serialize to ensure hex storage
-    let v_hex = BigUint::parse_bytes(payload.v.as_bytes(), 16)
-        .ok_or((StatusCode::BAD_REQUEST, "Invalid v".to_string()))?
-        .to_str_radix(16);
-    let xs_hex: Vec<String> = payload
+    // --- Input Parsing and Basic Validation ---
+    let v_biguint = hex_to_biguint(&payload.v)
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid v format: {}", e)))?;
+    let xs_biguint: Vec<BigUint> = payload
         .xs
         .iter()
         .map(|x| {
-            BigUint::parse_bytes(x.as_bytes(), 16)
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Invalid x {}", x)))
-                .map(|b| b.to_str_radix(16))
+            hex_to_biguint(x).map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid x format '{}': {}", x, e),
+                )
+            })
         })
         .collect::<Result<_, _>>()?;
-    let req = CreateSignatureRequest {
-        v: v_hex,
-        xs: xs_hex,
-        members: payload.members,
-        message: payload.message,
+
+    if payload.members.len() != xs_biguint.len() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Number of members does not match number of signature parts (xs)".to_string(),
+        ));
+    }
+    if payload.members.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Member list cannot be empty".to_string(),
+        ));
+    }
+
+    // --- Fetch Public Keys for Verification ---
+    // NOTE: Assumes get_public_keys_for_users returns keys in the same order as payload.members
+    let ring_pubs: Vec<PublicKey> = get_public_keys_for_users(&payload.members) // Call the imported function
+        .await
+        .map_err(|e| {
+            // Propagate the status code and message from get_public_keys_for_users
+            e
+        })?;
+
+    // Ensure the correct number of keys were fetched and they correspond to the members
+    // This check might be redundant if get_public_keys_for_users guarantees order and handles errors for missing users
+    // Keeping it for robustness, but consider if get_public_keys_for_users should return error if any user is not found.
+    if ring_pubs.len() != payload.members.len() {
+        // This case might be less likely now if get_public_keys_for_users errors on missing keys
+        return Err((
+            StatusCode::BAD_REQUEST, // Or INTERNAL_SERVER_ERROR depending on expected behavior
+            "Could not retrieve public keys for all specified members.".to_string(),
+        ));
+    }
+
+    // --- Calculate Common Domain Bit Length 'b' ---
+    let b = ring_pubs.iter().map(|pk| pk.n.bits()).max().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to calculate common domain bit length 'b' from fetched keys.".to_string(),
+    ))? as usize
+        + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+
+    // --- Reconstruct Ring Signature ---
+    let ring_sig = RingSignature {
+        v: v_biguint,
+        xs: xs_biguint,
     };
-    match insert_signature(&pool, req).await {
-        Ok(id) => Ok(Json(CreateSignatureResponse { id })),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+
+    // --- Verify Signature ---
+    let message_bytes = payload.message.as_bytes();
+    match ring_verify(&ring_pubs, &ring_sig, message_bytes, b) {
+        Ok(true) => {
+            // Verification successful, proceed to save
+            // Re-serialize v and xs to hex for storage consistency
+            let v_hex = ring_sig.v.to_str_radix(16);
+            let xs_hex: Vec<String> = ring_sig.xs.iter().map(|x| x.to_str_radix(16)).collect();
+
+            let req = CreateSignatureRequest {
+                v: v_hex,
+                xs: xs_hex,
+                members: payload.members, // Store original member list
+                message: payload.message,
+            };
+            match insert_signature(&pool, req).await {
+                Ok(id) => Ok(Json(CreateSignatureResponse { id })),
+                Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+            }
+        }
+        Ok(false) => {
+            // Verification failed
+            Err((
+                StatusCode::BAD_REQUEST,
+                "Signature verification failed".to_string(),
+            ))
+        }
+        Err(e) => {
+            // Error during verification process
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Error during signature verification: {}", e),
+            ))
+        }
     }
 }
 
