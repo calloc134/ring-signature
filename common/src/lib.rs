@@ -1,14 +1,20 @@
-pub mod constants;
-pub mod crypto_utils;
+// エラーハンドリング
 pub mod error;
-pub mod ring;
+// RSA暗号関連
 pub mod rsa;
+// リング署名関連
+pub mod ring;
+// 暗号ユーティリティ
+pub mod crypto_utils;
+// 定数
+pub mod constants;
+// CLI用モデル
+pub mod models;
+// シリアライゼーションヘルパー
+pub mod serialization;
 
-pub use constants::*;
-pub use crypto_utils::{d_k, e_k};
-pub use error::{RingError, RsaError};
+pub use error::RingError;
+pub use models::CliSignaturePayload;
 pub use ring::{ring_sign, ring_verify, RingSignature};
-pub use rsa::{
-    generate_keypair, load_keypair_from_pgp, load_public_key_from_pgp, rsa_sign, rsa_verify,
-    KeyPair, PublicKey, SecretKey,
-};
+pub use rsa::{generate_keypair, KeyPair, PublicKey, SecretKey};
+pub use serialization::{biguint_to_hex, hex_to_biguint};

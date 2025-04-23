@@ -261,48 +261,153 @@ chmod +x ./common-tagname-x86_64-unknown-linux-gnu
 cargo run
 ```
 
-プロンプトで、どちらの鍵形式を使用するかを選択します。
+プログラムを実行すると、まず操作モード（署名生成または署名検証）を選択します。
 
-その後、鍵のファイルパス ( PGP/GPG 形式の場合は秘密鍵のパスフレーズも必要 ) を入力します。
-処理が開始され、リング署名が生成されます。
-その後、署名の検証が行われ、結果が表示されます。
+**署名生成 (Sign) モード:**
+
+1.  鍵ファイル形式（PKCS#8 または OpenPGP）を選択します。
+2.  リングメンバーの鍵を順番に追加していきます。
+    - 各メンバーを追加する際に、そのメンバーを**真の署名者**にするかを尋ねられます (`y/N`)。
+    - **署名者**の場合: 秘密鍵のファイルパスを入力します。署名者はリング内に 1 人だけ指定できます。  
+      PKCS#8 形式の場合は公開鍵のパスも必要です。また、OpenPGP 形式の場合はパスワードも必要です。
+    - **署名者でない**場合: 公開鍵のファイルパスのみを入力します。
+    - リングには最低 2 人のメンバー（署名者 1 人、非署名者 1 人以上）が必要です。
+3.  署名するメッセージを入力します。
+4.  リング署名が生成され、内部で検証が行われます。
+5.  生成された署名が JSON 形式で表示されます。
+6.  署名をファイルに保存するかどうかを尋ねられます (`y/N`)。  
+    保存する場合は、ファイル名を指定します。
+
+**署名検証 (Verify) モード:**
+
+1.  署名データ (JSON) の入力方法（ファイルから読み込み または 標準入力から貼り付け）を選択します。
+2.  署名データを入力（またはファイルパスを指定）します。
+3.  署名に使用された鍵のファイル形式（PKCS#8 または OpenPGP）を選択します。
+4.  署名生成時に使用された**順番通り**に、リングメンバー全員の**公開鍵**ファイルパスを入力します。
+5.  署名の検証が行われ、結果（VALID / INVALID）が表示されます。
 
 ### 5.3 実行例
 
+以下は、署名生成モードの実行例です。
+
 ```
-鍵ファイル形式を選択: pem
-署名者秘密鍵ファイルパス: keys/signer_private.pem
-署名者公開鍵ファイルパス: keys/signer_public.pem
-メンバー1 公開鍵ファイルパス: keys/member1_public.pem
-メンバー2 公開鍵ファイルパス: keys/member2_public.pem
-[2025-04-19T13:12:28Z INFO  common] PGP証明書から鍵を読み込み中...
-[2025-04-19T13:12:28Z INFO  common::rsa] Loading secret key from PEM: keys/signer_private.pem
-[2025-04-19T13:12:28Z INFO  common::rsa] Secret key loaded successfully: n bits = 4096
-[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/signer_public.pem
-[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
-[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member1_public.pem
-[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
-[2025-04-19T13:12:28Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
-[2025-04-19T13:12:28Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
-[2025-04-19T13:12:28Z INFO  common] 鍵の読み込み完了。
-[2025-04-19T13:12:28Z INFO  common] 署名者のモジュラス n (先頭20文字): 69837846587028374360...
-[2025-04-19T13:12:28Z INFO  common] メッセージ: Hello RSA and Ring Signature!
-[2025-04-19T13:12:28Z INFO  common] RSAでメッセージに署名中...
-[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成開始: key.n bits = 4096, m bits = 256, b = 4256
-[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名生成完了: 4096 bits
-[2025-04-19T13:12:28Z INFO  common] RSA署名 (hex): aa5fb7...
-[2025-04-19T13:12:28Z INFO  common] RSA署名を検証中...
-[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証開始: pubkey.n bits = 4096, m bits = 256, signature bits = 4096, b = 4256
-[2025-04-19T13:12:28Z INFO  common::rsa] RSA署名検証結果: true
-[2025-04-19T13:12:28Z INFO  common] 通常RSA署名検証結果: true
-[2025-04-19T13:12:28Z INFO  common] リング署名を生成中...
-[2025-04-19T13:12:28Z INFO  common::ring] リング署名生成開始: ring_size = 3, signer = 0, m_len = 29, b = 4256
-[2025-04-19T13:12:29Z INFO  common::ring] リング署名生成完了: v bits = 4253, xs_len = 3
-[2025-04-19T13:12:29Z INFO  common] リング署名 グルー値 v (hex): 1e9d5f...
-[2025-04-19T13:12:29Z INFO  common] リング署名を検証中...
-[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証開始: ring_size = 3, sig.v bits = 4253, sig.xs_len = 3, m_len = 29, b = 4256
-[2025-04-19T13:12:29Z INFO  common::ring] リング署名検証結果: true
-[2025-04-19T13:12:29Z INFO  common] リング署名検証結果: true
+Select operation mode:
+> Sign
+  Verify
+
+Select key file format for all keys:
+> PKCS#8 format (*.pem, *.key)
+  OpenPGP ASCII Armor format (*.asc)
+
+Add key for member #0? [Y/n]  yes
+Is member #0 the true signer? [y/N] no
+[2025-04-23T03:51:07Z INFO  common] Adding member #0 (non-signer). Please provide public key.
+Member #0 PUBLIC key file path [keys/member0_public.pem]:
+
+[2025-04-23T03:51:42Z INFO  common] Loading member #0 public key...
+[2025-04-23T03:51:42Z INFO  common::rsa] Loading public key from PEM: keys/member1_public.pem
+[2025-04-23T03:51:42Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:51:42Z INFO  common] Member key loaded for index 0.
+
+Add key for member #1? [Y/n] yes
+Is member #1 the true signer? [y/N] no
+[2025-04-23T03:52:01Z INFO  common] Adding member #1 (non-signer). Please provide public key.
+Member #1 PUBLIC key file path [keys/member1_public.pem]:
+
+[2025-04-23T03:52:36Z INFO  common] Loading member #1 public key...
+[2025-04-23T03:52:36Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
+[2025-04-23T03:52:36Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:52:36Z INFO  common] Member key loaded for index 1.
+Add key for member #2? [Y/n] yes
+[2025-04-23T03:52:51Z INFO  common] Designating member #2 as the signer. Please provide signer's keys.
+Signer PRIVATE key file path [keys/signer_private.pem]:
+Signer PUBLIC key file path [keys/signer_public.pem]:
+
+[2025-04-23T03:53:19Z INFO  common] Loading PKCS#8 signer keys...
+[2025-04-23T03:53:19Z INFO  common::rsa] Loading secret key from PEM: keys/signer_private.pem
+[2025-04-23T03:53:19Z INFO  common::rsa] Secret key loaded successfully: n bits = 4096
+[2025-04-23T03:53:19Z INFO  common::rsa] Loading public key from PEM: keys/signer_public.pem
+[2025-04-23T03:53:19Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:53:19Z INFO  common] Signer keys loaded and designated at index 2.
+Add key for member #3? [Y/n]  no
+
+[2025-04-23T03:53:53Z INFO  common] Ring constructed with 3 members. Signer is at index 2.
+Enter the message to sign: hello world!
+[2025-04-23T03:54:07Z INFO  common] Calculated common domain bit length b = 4256
+[2025-04-23T03:54:07Z INFO  common] Generating ring signature...
+[2025-04-23T03:54:07Z INFO  common::ring] リング署名生成開始: ring_size = 3, signer = 2, m_len = 12, b = 4256
+[2025-04-23T03:54:07Z INFO  common::ring] リング署名生成完了: v bits = 4256, xs_len = 3
+[2025-04-23T03:54:07Z INFO  common] Ring signature generated successfully.
+[2025-04-23T03:54:07Z INFO  common] Verifying generated signature...
+[2025-04-23T03:54:07Z INFO  common::ring] リング署名検証開始: ring_size = 3, sig.v bits = 4256, sig.xs_len = 3, m_len = 12, b = 4256
+[2025-04-23T03:54:07Z INFO  common::ring] リング署名検証結果: true
+[2025-04-23T03:54:07Z INFO  common] Self-verification successful.
+[2025-04-23T03:54:07Z INFO  common] Preparing JSON output...
+
+--- Generated Signature (JSON) ---
+{
+  "v": (省略),
+  "xs": [
+    (省略)
+  ],
+  "message": "hello world!"
+}
+--- End of Signature ---
+Save signature to a file? [y/N]
+Enter output filename: signature.json
+[2025-04-23T03:54:30Z INFO  common] Saving signature to file: signature.json
+[2025-04-23T03:54:30Z INFO  common] Signature successfully saved to signature.json
+```
+
+以下は、署名検証モードの実行例です。
+
+```
+Select operation mode:
+  Sign
+> Verify
+
+How to provide the signature JSON?:
+> Read from file
+  Paste from stdin
+
+Enter signature JSON file path [signature.json]:
+
+[2025-04-23T03:57:30Z INFO  common] Reading signature from file: signature.json
+[2025-04-23T03:57:30Z INFO  common] Parsing signature JSON...
+[2025-04-23T03:57:30Z INFO  common] Signature JSON parsed successfully.
+Select key file format for ALL ring members:
+> PKCS#8 format (*.pem, *.key)
+  OpenPGP ASCII Armor format (*.asc)
+
+[2025-04-23T03:57:38Z INFO  common] Signature indicates 3 ring members. Please provide public keys in the original signing order.
+Member #1 PUBLIC key file path (original index 0) [keys/member0_public.pem]:
+
+[2025-04-23T03:57:55Z INFO  common] Loading member #1 public key...
+[2025-04-23T03:57:55Z INFO  common::rsa] Loading public key from PEM: keys/member1_public.pem
+[2025-04-23T03:57:55Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:57:55Z INFO  common] Member key loaded.
+Member #2 PUBLIC key file path (original index 1) [keys/member1_public.pem]:
+
+[2025-04-23T03:59:01Z INFO  common] Loading member #2 public key...
+[2025-04-23T03:59:01Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
+[2025-04-23T03:59:01Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:59:01Z INFO  common] Member key loaded.
+Member #3 PUBLIC key file path (original index 2) [keys/member2_public.pem]:
+
+[2025-04-23T03:59:26Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
+[2025-04-23T03:59:26Z INFO  common] Member key loaded.
+[2025-04-23T03:59:26Z INFO  common] Reconstructing signature data...
+[2025-04-23T03:59:26Z INFO  common] Signature data reconstructed.
+[2025-04-23T03:59:26Z INFO  common] Calculated common domain bit length b = 4256
+[2025-04-23T03:59:26Z INFO  common] Verifying ring signature...
+[2025-04-23T03:59:26Z INFO  common::ring] リング署名検証開始: ring_size = 3, sig.v bits = 4256, sig.xs_len = 3, m_len = 12, b = 4256
+[2025-04-23T03:59:26Z INFO  common::ring] リング署名検証結果: true
+
+--- Verification Result ---
+Signature is VALID.
+[2025-04-23T03:59:26Z INFO  common] Verification successful.
+--- End of Verification ---
+
 ```
 
 ## 6. 使い方 (GUI)
