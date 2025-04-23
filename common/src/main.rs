@@ -55,7 +55,7 @@ fn handle_sign() -> Result<()> {
         ("OpenPGP ASCII Armor format (*.asc)", "asc"),
     ];
     let fmt_idx = Select::new()
-        .with_prompt("Select key file format")
+        .with_prompt("Select key file format for all keys") // Clarify format applies to all
         .items(
             &format_options
                 .iter()
@@ -66,107 +66,157 @@ fn handle_sign() -> Result<()> {
         .interact()?;
     let fmt = format_options[fmt_idx].1; // Get the internal name ("pem" or "asc")
 
-    // --- Load Signer Keys ---
-    let signer_priv_path: String = Input::<String>::new()
-        .with_prompt("Signer PRIVATE key file path")
-        .default(
-            match fmt {
-                "pem" => "keys/signer_private.pem", // Keep internal logic based on "pem" / "asc"
-                _ => "keys/signer_private.asc",
-            }
-            .to_string(),
-        )
-        .interact_text()?;
+    // --- Initialize Key Storage ---
+    let mut ring_pubs: Vec<PublicKey> = Vec::new();
+    let mut signer_index: Option<usize> = None;
+    let mut signer_secret_key: Option<SecretKey> = None;
 
-    let (signer_public_key, signer_secret_key) = if fmt == "pem" {
-        // Use internal name
-        // PEM: Load public and private keys from separate files
-        let signer_pub_path: String = Input::<String>::new()
-            .with_prompt("Signer PUBLIC key file path")
-            .default("keys/signer_public.pem".to_string())
-            .interact_text()?;
-
-        info!("Loading PKCS#8 signer keys..."); // Update log message
-        let secret = load_secret_key(fmt, &signer_priv_path, None)?;
-        let public = load_public_key(fmt, &signer_pub_path, None)?;
-        (public, secret)
-    } else {
-        // "asc"
-        // ASC: Load keypair from the private key file, prompt for password
-        let password = Some(
-            Password::new()
-                .with_prompt("Signer private key password (if any)")
-                .allow_empty_password(true) // Allow empty for unencrypted keys
-                .interact()?,
-        );
-
-        info!("Loading OpenPGP signer keypair..."); // Update log message
-                                                    // Use a helper or directly call load_keypair_from_pgp
-        let keypair = load_keypair_from_pgp(&signer_priv_path, password.as_deref())
-            .with_context(|| format!("Failed to load PGP keypair from '{}'", signer_priv_path))?;
-        (keypair.public, keypair.secret)
-    };
-
-    // Verify modulus match
-    if signer_public_key.n != signer_secret_key.n {
-        return Err(anyhow!("Signer public and private key modulus mismatch!"));
-    }
-    info!("Signer keys loaded successfully.");
-
-    // --- Load Member Public Keys ---
-    let mut member_public_keys: Vec<PublicKey> = Vec::new();
+    // --- Loop to Add Ring Members/Signer ---
     loop {
-        let add_member = Confirm::new()
-            .with_prompt(format!(
-                "Add member public key #{}?",
-                member_public_keys.len() + 1
-            ))
-            .default(true)
+        let current_member_index = ring_pubs.len();
+        let add_key = Confirm::new()
+            .with_prompt(format!("Add key for member #{}?", current_member_index))
+            .default(true) // Default to adding more keys initially
             .interact()?;
 
-        if !add_member {
-            break;
+        if !add_key {
+            // Ensure at least two members (one signer, one non-signer) before breaking
+            if ring_pubs.len() >= 2 && signer_index.is_some() {
+                break;
+            } else if ring_pubs.len() < 2 {
+                error!("Ring must contain at least 2 members (including the signer).");
+                // Continue loop to add more keys
+                continue;
+            } else {
+                // ring_pubs.len() >= 2 but signer_index.is_none()
+                error!("You must designate one member as the signer.");
+                // Continue loop
+                continue;
+            }
         }
 
-        let member_pub_path: String = Input::<String>::new()
-            .with_prompt(format!(
-                "Member #{} PUBLIC key file path",
-                member_public_keys.len() + 1
-            ))
-            .default(
-                match fmt {
-                    // Use internal name
-                    "pem" => format!("keys/member{}_public.pem", member_public_keys.len() + 1),
-                    _ => format!("keys/member{}_public.asc", member_public_keys.len() + 1),
+        // Ask if this member is the signer
+        let is_signer = if signer_index.is_none() {
+            Confirm::new()
+                .with_prompt(format!(
+                    "Is member #{} the true signer?",
+                    current_member_index
+                ))
+                .default(false)
+                .interact()?
+        } else {
+            // Signer already designated
+            false
+        };
+
+        if is_signer {
+            // --- Load Signer Keys ---
+            info!(
+                "Designating member #{} as the signer. Please provide signer's keys.",
+                current_member_index
+            );
+            let signer_priv_path: String = Input::<String>::new()
+                .with_prompt("Signer PRIVATE key file path")
+                .default(
+                    match fmt {
+                        "pem" => "keys/signer_private.pem",
+                        _ => "keys/signer_private.asc",
+                    }
+                    .to_string(),
+                )
+                .interact_text()?;
+
+            let (public_key, secret_key) = if fmt == "pem" {
+                let signer_pub_path: String = Input::<String>::new()
+                    .with_prompt("Signer PUBLIC key file path")
+                    .default("keys/signer_public.pem".to_string())
+                    .interact_text()?;
+                info!("Loading PKCS#8 signer keys...");
+                let secret = load_secret_key(fmt, &signer_priv_path, None)?;
+                let public = load_public_key(fmt, &signer_pub_path, None)?;
+                (public, secret)
+            } else {
+                // asc
+                let password = Some(
+                    Password::new()
+                        .with_prompt("Signer private key password (if any)")
+                        .allow_empty_password(true)
+                        .interact()?,
+                );
+                info!("Loading OpenPGP signer keypair...");
+                let keypair = load_keypair_from_pgp(&signer_priv_path, password.as_deref())
+                    .with_context(|| {
+                        format!("Failed to load PGP keypair from '{}'", signer_priv_path)
+                    })?;
+                (keypair.public, keypair.secret)
+            };
+
+            // Verify modulus match
+            if public_key.n != secret_key.n {
+                error!("Signer public and private key modulus mismatch! Please re-enter keys for this member.");
+                continue; // Restart loop for this member index
+            }
+
+            ring_pubs.push(public_key);
+            signer_secret_key = Some(secret_key);
+            signer_index = Some(current_member_index);
+            info!(
+                "Signer keys loaded and designated at index {}.",
+                current_member_index
+            );
+        } else {
+            // --- Load Non-Signer Public Key ---
+            if signer_index.is_some() && current_member_index == signer_index.unwrap() {
+                // This should not happen due to the is_signer logic, but as a safeguard:
+                error!(
+                    "Internal error: Trying to load non-signer key for designated signer index."
+                );
+                continue;
+            }
+            info!(
+                "Adding member #{} (non-signer). Please provide public key.",
+                current_member_index
+            );
+            let member_pub_path: String = Input::<String>::new()
+                .with_prompt(format!(
+                    "Member #{} PUBLIC key file path",
+                    current_member_index
+                ))
+                .default(
+                    match fmt {
+                        "pem" => format!("keys/member{}_public.pem", current_member_index),
+                        _ => format!("keys/member{}_public.asc", current_member_index),
+                    }
+                    .to_string(),
+                )
+                .interact_text()?;
+
+            info!("Loading member #{} public key...", current_member_index);
+            match load_public_key(fmt, &member_pub_path, None) {
+                Ok(pk) => {
+                    ring_pubs.push(pk);
+                    info!("Member key loaded for index {}.", current_member_index);
                 }
-                .to_string(),
-            )
-            .interact_text()?;
+                Err(e) => {
+                    error!(
+                        "Failed to load public key for member #{}: {}. Please try again.",
+                        current_member_index, e
+                    );
+                    // Do not increment member index, stay in loop for the same index
+                    continue;
+                }
+            }
+        }
+    } // End of member adding loop
 
-        info!(
-            "Loading member #{} public key...",
-            member_public_keys.len() + 1
-        );
-        let member_pk = load_public_key(fmt, &member_pub_path, None)?;
-        member_public_keys.push(member_pk);
-        info!("Member key loaded.");
-    }
-
-    if member_public_keys.is_empty() {
-        return Err(anyhow!(
-            "At least one member public key is required besides the signer."
-        ));
-    }
-
-    // --- Construct Ring ---
-    // Signer is always index 0 in this CLI implementation
-    let ring_pubs: Vec<PublicKey> = std::iter::once(signer_public_key.clone())
-        .chain(member_public_keys.into_iter())
-        .collect();
-    let signer_index = 0;
+    // --- Final Validation ---
+    // Signer index must be Some and secret key must be Some due to loop logic ensuring this before break
+    let final_signer_index = signer_index.expect("Signer index should be set");
+    let final_signer_secret_key = signer_secret_key.expect("Signer secret key should be set");
     info!(
-        "Ring constructed with {} members (including signer at index 0).",
-        ring_pubs.len()
+        "Ring constructed with {} members. Signer is at index {}.",
+        ring_pubs.len(),
+        final_signer_index
     );
 
     // --- Get Message ---
@@ -191,8 +241,14 @@ fn handle_sign() -> Result<()> {
 
     // --- Generate Ring Signature ---
     info!("Generating ring signature...");
-    let ring_sig = ring_sign(&ring_pubs, signer_index, &signer_secret_key, message, b)
-        .context("Failed to generate ring signature")?;
+    let ring_sig = ring_sign(
+        &ring_pubs,
+        final_signer_index,
+        &final_signer_secret_key,
+        message,
+        b,
+    ) // Use unwrapped values
+    .context("Failed to generate ring signature")?;
     info!("Ring signature generated successfully.");
 
     // --- Self-Verification (Optional but recommended) ---
