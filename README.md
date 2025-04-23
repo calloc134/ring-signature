@@ -301,7 +301,6 @@ Select key file format for all keys:
 
 Add key for member #0? [Y/n]  yes
 Is member #0 the true signer? [y/N] no
-
 [2025-04-23T03:51:07Z INFO  common] Adding member #0 (non-signer). Please provide public key.
 Member #0 PUBLIC key file path [keys/member0_public.pem]:
 
@@ -312,7 +311,6 @@ Member #0 PUBLIC key file path [keys/member0_public.pem]:
 
 Add key for member #1? [Y/n] yes
 Is member #1 the true signer? [y/N] no
-
 [2025-04-23T03:52:01Z INFO  common] Adding member #1 (non-signer). Please provide public key.
 Member #1 PUBLIC key file path [keys/member1_public.pem]:
 
@@ -321,7 +319,6 @@ Member #1 PUBLIC key file path [keys/member1_public.pem]:
 [2025-04-23T03:52:36Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
 [2025-04-23T03:52:36Z INFO  common] Member key loaded for index 1.
 Add key for member #2? [Y/n] yes
-
 [2025-04-23T03:52:51Z INFO  common] Designating member #2 as the signer. Please provide signer's keys.
 Signer PRIVATE key file path [keys/signer_private.pem]:
 Signer PUBLIC key file path [keys/signer_public.pem]:
@@ -336,7 +333,6 @@ Add key for member #3? [Y/n]  no
 
 [2025-04-23T03:53:53Z INFO  common] Ring constructed with 3 members. Signer is at index 2.
 Enter the message to sign: hello world!
-
 [2025-04-23T03:54:07Z INFO  common] Calculated common domain bit length b = 4256
 [2025-04-23T03:54:07Z INFO  common] Generating ring signature...
 [2025-04-23T03:54:07Z INFO  common::ring] リング署名生成開始: ring_size = 3, signer = 2, m_len = 12, b = 4256
@@ -391,11 +387,13 @@ Member #1 PUBLIC key file path (original index 0) [keys/member0_public.pem]:
 [2025-04-23T03:57:55Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
 [2025-04-23T03:57:55Z INFO  common] Member key loaded.
 Member #2 PUBLIC key file path (original index 1) [keys/member1_public.pem]:
+
 [2025-04-23T03:59:01Z INFO  common] Loading member #2 public key...
 [2025-04-23T03:59:01Z INFO  common::rsa] Loading public key from PEM: keys/member2_public.pem
 [2025-04-23T03:59:01Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
 [2025-04-23T03:59:01Z INFO  common] Member key loaded.
 Member #3 PUBLIC key file path (original index 2) [keys/member2_public.pem]:
+
 [2025-04-23T03:59:26Z INFO  common::rsa] Public key loaded successfully: n bits = 4096, e = 65537
 [2025-04-23T03:59:26Z INFO  common] Member key loaded.
 [2025-04-23T03:59:26Z INFO  common] Reconstructing signature data...
