@@ -1,5 +1,6 @@
 ---
 marp: true
+paginate: true
 ---
 
 # RSA を用いたリング署名の簡易的実装
