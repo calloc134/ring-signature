@@ -987,6 +987,8 @@ dependencies = [
  "rand 0.8.5",
  "rsa",
  "sequoia-openpgp",
+ "serde",
+ "serde_json",
  "sha3",
  "thiserror 2.0.12",
 ]

@@ -1,39 +1,71 @@
-use anyhow::Result;
-use common::{KeyPair, PublicKey};
-use num_traits::One;
-// 定数モジュールをインポート
-use common::constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-// リング署名関連関数をインポート
-use common::ring::{ring_sign, ring_verify};
-// RSA関連関数と構造体をインポート
-use common::rsa::{
-    load_keypair_from_pgp, load_public_key_from_pem, load_public_key_from_pgp,
-    load_secret_key_from_pem, rsa_sign, rsa_verify,
+use anyhow::{anyhow, Context, Result};
+// Common library imports
+use common::{
+    constants::COMMON_DOMAIN_BIT_LENGTH_ADDITION,
+    models::CliSignaturePayload,
+    ring::{ring_sign, ring_verify, RingSignature},
+    rsa::{
+        load_keypair_from_pgp, load_public_key_from_pem, load_public_key_from_pgp,
+        load_secret_key_from_pem, PublicKey, SecretKey,
+    },
+    serialization::{biguint_to_hex, hex_to_biguint},
 };
-// ハッシュ関数 (SHA3-256)
-use sha3::Digest;
-// パス操作用
-// ログ出力用
+// BigUint and traits
+use num_bigint::BigUint;
+// Logging
 use log::{debug, error, info};
-// dialoguer をインポート
-use dialoguer::{Input, Password, Select};
+// CLI interaction
+use dialoguer::{Confirm, Input, Password, Select};
+use std::io::{stdin, Read};
 
 fn main() -> Result<()> {
-    // ロガー初期化
+    // Initialize logger
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    // 鍵ファイル形式を選択
+    // Select mode: Sign or Verify
+    let modes = &["Sign", "Verify"];
+    let mode_idx = Select::new()
+        .with_prompt("Select operation mode")
+        .items(modes)
+        .default(0)
+        .interact()?;
+
+    match modes[mode_idx] {
+        "Sign" => handle_sign()?,
+        "Verify" => handle_verify()?,
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}
+
+// --- Sign Mode ---
+fn handle_sign() -> Result<()> {
+    info!("--- Sign Mode ---");
+
+    // Select key file format
     let formats = &["pem", "asc"];
     let fmt_idx = Select::new()
-        .with_prompt("鍵ファイル形式を選択")
+        .with_prompt("Select key file format")
         .items(formats)
         .default(0)
         .interact()?;
     let fmt = formats[fmt_idx];
 
-    // 署名者秘密鍵ファイルパス入力
+    // --- Load Signer Keys ---
+    let signer_pub_path: String = Input::<String>::new()
+        .with_prompt("Signer PUBLIC key file path")
+        .default(
+            match fmt {
+                "pem" => "keys/signer_public.pem",
+                _ => "keys/signer_public.asc", // PGP public key can often be separate
+            }
+            .to_string(),
+        )
+        .interact_text()?;
+
     let signer_priv_path: String = Input::<String>::new()
-        .with_prompt("署名者秘密鍵ファイルパス")
+        .with_prompt("Signer PRIVATE key file path")
         .default(
             match fmt {
                 "pem" => "keys/signer_private.pem",
@@ -43,179 +75,283 @@ fn main() -> Result<()> {
         )
         .interact_text()?;
 
-    // PEMの場合は公開鍵ファイルパスも入力
-    let signer_pub_path = if fmt == "pem" {
-        Some(
-            Input::<String>::new()
-                .with_prompt("署名者公開鍵ファイルパス")
-                .default("keys/signer_public.pem".to_string())
-                .interact_text()?,
-        )
-    } else {
-        None
-    };
-
-    // ASCの場合はパスワード入力
     let password = if fmt == "asc" {
         Some(
             Password::new()
-                .with_prompt("秘密鍵パスワード")
-                .allow_empty_password(false)
+                .with_prompt("Signer private key password (if any)")
+                .allow_empty_password(true) // Allow empty for unencrypted keys
                 .interact()?,
         )
     } else {
         None
     };
 
-    // メンバー公開鍵ファイルパス入力
-    let member1_pub_path: String = Input::<String>::new()
-        .with_prompt("メンバー1 公開鍵ファイルパス")
-        .default(
-            match fmt {
-                "pem" => "keys/member1_public.pem",
-                _ => "keys/member1_public.asc",
-            }
-            .to_string(),
-        )
-        .interact_text()?;
-    let member2_pub_path: String = Input::<String>::new()
-        .with_prompt("メンバー2 公開鍵ファイルパス")
-        .default(
-            match fmt {
-                "pem" => "keys/member2_public.pem",
-                _ => "keys/member2_public.asc",
-            }
-            .to_string(),
-        )
-        .interact_text()?;
+    info!("Loading signer keys...");
+    let signer_public_key = load_public_key(fmt, &signer_pub_path, None)?;
+    let signer_secret_key = load_secret_key(fmt, &signer_priv_path, password.as_deref())?;
 
-    // --- 鍵の読み込み ---
-    info!("PGP証明書から鍵を読み込み中...");
-    let (signer_public_key, signer_secret_key) = if fmt == "pem" {
-        let secret = load_secret_key_from_pem(&signer_priv_path)?;
-        let public = load_public_key_from_pem(signer_pub_path.as_ref().unwrap())?;
-        (public, secret)
-    } else {
-        let kp = load_keypair_from_pgp(&signer_priv_path, password.as_deref())?;
-        (kp.public.clone(), kp.secret)
-    };
-    let member1_public_key = if fmt == "pem" {
-        load_public_key_from_pem(&member1_pub_path)?
-    } else {
-        load_public_key_from_pgp(&member1_pub_path)?
-    };
-    let member2_public_key = if fmt == "pem" {
-        load_public_key_from_pem(&member2_pub_path)?
-    } else {
-        load_public_key_from_pgp(&member2_pub_path)?
-    };
-
-    // リングメンバーの公開鍵リストを作成 (署名者の公開鍵を含む)
-    let ring_pubs: Vec<PublicKey> = vec![
-        signer_public_key.clone(), // 署名者はインデックス 0
-        member1_public_key,
-        member2_public_key,
-    ];
-    // 署名者のインデックスを設定
-    let signer_index = 0;
-
-    info!("鍵の読み込み完了。");
-    // 読み込んだ鍵情報の一部を表示 (デバッグ用)
-
-    // 署名者の公開鍵と秘密鍵のモジュラスが一致するか確認 (任意)
+    // Verify modulus match
     if signer_public_key.n != signer_secret_key.n {
-        error!("エラー: 署名者の公開鍵と秘密鍵のモジュラスが一致しません！");
+        return Err(anyhow!("Signer public and private key modulus mismatch!"));
+    }
+    info!("Signer keys loaded successfully.");
+
+    // --- Load Member Public Keys ---
+    let mut member_public_keys: Vec<PublicKey> = Vec::new();
+    loop {
+        let add_member = Confirm::new()
+            .with_prompt(format!(
+                "Add member public key #{}?",
+                member_public_keys.len() + 1
+            ))
+            .default(true)
+            .interact()?;
+
+        if !add_member {
+            break;
+        }
+
+        let member_pub_path: String = Input::<String>::new()
+            .with_prompt(format!(
+                "Member #{} PUBLIC key file path",
+                member_public_keys.len() + 1
+            ))
+            .default(
+                match fmt {
+                    "pem" => format!("keys/member{}_public.pem", member_public_keys.len() + 1),
+                    _ => format!("keys/member{}_public.asc", member_public_keys.len() + 1),
+                }
+                .to_string(),
+            )
+            .interact_text()?;
+
+        info!(
+            "Loading member #{} public key...",
+            member_public_keys.len() + 1
+        );
+        let member_pk = load_public_key(fmt, &member_pub_path, None)?;
+        member_public_keys.push(member_pk);
+        info!("Member key loaded.");
     }
 
+    if member_public_keys.is_empty() {
+        return Err(anyhow!(
+            "At least one member public key is required besides the signer."
+        ));
+    }
+
+    // --- Construct Ring ---
+    // Signer is always index 0 in this CLI implementation
+    let ring_pubs: Vec<PublicKey> = std::iter::once(signer_public_key.clone())
+        .chain(member_public_keys.into_iter())
+        .collect();
+    let signer_index = 0;
     info!(
-        "署名者のモジュラス n (先頭20文字): {}...",
-        &signer_public_key.n.to_string()[..20]
+        "Ring constructed with {} members (including signer at index 0).",
+        ring_pubs.len()
     );
 
-    // 署名対象のメッセージ
-    let message = b"Hello RSA and Ring Signature!";
+    // --- Get Message ---
+    let message_str: String = Input::<String>::new()
+        .with_prompt("Enter the message to sign")
+        .interact_text()?;
+    let message = message_str.as_bytes();
+    info!("Message to sign: {}", message_str);
 
-    info!("メッセージ: {}", String::from_utf8_lossy(message));
-
-    // --- 通常のRSA署名と検証 (比較用) ---
-    info!("RSAでメッセージに署名中...");
-    // RSA署名用の共通ドメインビット長 b を計算
-    let rsa_b = signer_public_key.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-    // メッセージのハッシュ値を計算
-    let hash = sha3::Sha3_256::digest(message);
-    // ハッシュ値を BigUint に変換し、2^b で剰余を取る
-    let m = num_bigint::BigUint::from_bytes_be(&hash) % (num_bigint::BigUint::one() << rsa_b);
-
-    // 署名者の鍵ペアを作成
-    let signer_keypair = KeyPair {
-        public: signer_public_key.clone(),
-        secret: signer_secret_key.clone(),
-    };
-    // RSA署名を生成
-    let rsa_signature = rsa_sign(&signer_keypair, &m, rsa_b)?;
-    // RSA署名を16進数で表示
-    info!(
-        "RSA署名 (hex): {}",
-        rsa_signature
-            .to_bytes_be()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
-    );
-
-    info!("RSA署名を検証中...");
-    // RSA署名を検証
-    let rsa_verify_result = rsa_verify(&signer_public_key, &m, &rsa_signature, rsa_b)?;
-    info!("通常RSA署名検証結果: {}", rsa_verify_result);
-
-    // --- リング署名の生成と検証 ---
-    // リング署名用の共通ドメインビット長 b を計算 (リング内の最大鍵長を使用)
+    // --- Calculate Common Domain Bit Length 'b' ---
     let b = ring_pubs
         .iter()
         .map(|pk| pk.n.bits())
         .max()
-        .unwrap_or(0) as usize // リングが空の場合のフォールバック (ここでは発生しない想定)
+        .unwrap_or(0) as usize // Should not happen with checks above
         + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
-    // b の計算に失敗した場合のエラーハンドリング
     if b == COMMON_DOMAIN_BIT_LENGTH_ADDITION {
-        error!("エラー: 読み込んだ鍵から最大鍵サイズを決定できませんでした。");
-        return Err(anyhow::anyhow!("Failed to calculate b"));
+        return Err(anyhow!("Failed to calculate common domain bit length 'b'. Ring might be empty or keys invalid."));
     }
+    info!("Calculated common domain bit length b = {}", b);
 
-    info!("リング署名を生成中...");
-    // リング署名を生成
-    let ring_sig = ring_sign(
-        &ring_pubs,
-        signer_index,       // 署名者のインデックス
-        &signer_secret_key, // 署名者の秘密鍵
-        message,
-        b,
-    )?;
-    // リング署名のグルー値 v を16進数で表示
-    info!(
-        "リング署名 グルー値 v (hex): {}",
-        ring_sig
-            .v
-            .to_bytes_be()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
-    );
-    // デバッグレベルで寄与値 xs を表示 (非常に長くなる可能性があるため)
-    debug!(
-        "リング署名 寄与値 xs: {:?}",
-        ring_sig
+    // --- Generate Ring Signature ---
+    info!("Generating ring signature...");
+    let ring_sig = ring_sign(&ring_pubs, signer_index, &signer_secret_key, message, b)
+        .context("Failed to generate ring signature")?;
+    info!("Ring signature generated successfully.");
+
+    // --- Self-Verification (Optional but recommended) ---
+    info!("Verifying generated signature...");
+    let verify_result = ring_verify(&ring_pubs, &ring_sig, message, b)
+        .context("Failed during self-verification")?;
+    if !verify_result {
+        error!("Self-verification FAILED! The generated signature is invalid.");
+        return Err(anyhow!("Generated signature failed self-verification"));
+    }
+    info!("Self-verification successful.");
+
+    // --- Prepare and Output JSON ---
+    info!("Preparing JSON output...");
+    let signature_payload = CliSignaturePayload {
+        v: biguint_to_hex(&ring_sig.v),
+        xs: ring_sig
             .xs
             .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-    );
+            .map(biguint_to_hex)
+            .collect::<Vec<String>>(),
+        message: message_str, // Store original message string
+    };
 
-    info!("リング署名を検証中...");
-    // リング署名を検証
-    let ring_sig_verify_result = ring_verify(&ring_pubs, &ring_sig, message, b)?;
+    let json_output = serde_json::to_string_pretty(&signature_payload)
+        .context("Failed to serialize signature to JSON")?;
 
-    info!("リング署名検証結果: {}", ring_sig_verify_result);
+    println!("\n--- Generated Signature (JSON) ---");
+    println!("{}", json_output);
+    println!("--- End of Signature ---");
+
     Ok(())
+}
+
+// --- Verify Mode ---
+fn handle_verify() -> Result<()> {
+    info!("--- Verify Mode ---");
+
+    // --- Get Signature JSON Input ---
+    println!("Paste the signature JSON below and press Ctrl+D (Unix) or Ctrl+Z then Enter (Windows) when done:");
+    let mut json_input_str = String::new();
+    stdin()
+        .read_to_string(&mut json_input_str)
+        .context("Failed to read signature JSON from stdin")?;
+
+    info!("Parsing signature JSON...");
+    let signature_payload: CliSignaturePayload =
+        serde_json::from_str(&json_input_str).context("Failed to parse signature JSON input")?;
+    debug!("Parsed signature payload: {:?}", signature_payload);
+    info!("Signature JSON parsed successfully.");
+
+    // --- Select Key Format ---
+    let formats = &["pem", "asc"];
+    let fmt_idx = Select::new()
+        .with_prompt("Select key file format for ALL ring members")
+        .items(formats)
+        .default(0)
+        .interact()?;
+    let fmt = formats[fmt_idx];
+
+    // --- Load Public Keys (in order) ---
+    let num_members = signature_payload.xs.len();
+    if num_members == 0 {
+        return Err(anyhow!(
+            "Signature payload contains no members (xs is empty)."
+        ));
+    }
+    info!("Signature indicates {} ring members. Please provide public keys in the original signing order.", num_members);
+
+    let mut ring_pubs: Vec<PublicKey> = Vec::with_capacity(num_members);
+    for i in 0..num_members {
+        let pub_path: String = Input::<String>::new()
+            .with_prompt(format!(
+                "Member #{} PUBLIC key file path (original index {})",
+                i + 1,
+                i
+            ))
+            .default(
+                match fmt {
+                    "pem" => format!("keys/member{}_public.pem", i), // Adjust default naming if needed
+                    _ => format!("keys/member{}_public.asc", i),
+                }
+                .to_string(),
+            )
+            .interact_text()?;
+
+        info!("Loading member #{} public key...", i + 1);
+        let pk = load_public_key(fmt, &pub_path, None)?;
+        ring_pubs.push(pk);
+        info!("Member key loaded.");
+    }
+
+    // --- Reconstruct Ring Signature ---
+    info!("Reconstructing signature data...");
+    let v =
+        hex_to_biguint(&signature_payload.v).context("Failed to convert signature 'v' from hex")?;
+    let xs: Result<Vec<BigUint>> = signature_payload
+        .xs
+        .iter()
+        .enumerate()
+        .map(|(i, x_hex)| {
+            hex_to_biguint(x_hex)
+                .with_context(|| format!("Failed to convert signature 'xs[{}]' from hex", i))
+        })
+        .collect();
+    let xs = xs?;
+
+    if xs.len() != ring_pubs.len() {
+        return Err(anyhow!(
+            "Number of public keys provided ({}) does not match number of signature parts 'xs' ({})",
+            ring_pubs.len(),
+            xs.len()
+        ));
+    }
+
+    let ring_sig = RingSignature { v, xs };
+    let message = signature_payload.message.as_bytes();
+    info!("Signature data reconstructed.");
+    debug!("Reconstructed ring_sig: {:?}", ring_sig);
+    debug!("Message bytes: {:?}", message);
+
+    // --- Calculate Common Domain Bit Length 'b' ---
+    let b = ring_pubs
+        .iter()
+        .map(|pk| pk.n.bits())
+        .max()
+        .unwrap_or(0) as usize // Should not happen with checks above
+        + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+
+    if b == COMMON_DOMAIN_BIT_LENGTH_ADDITION {
+        return Err(anyhow!(
+            "Failed to calculate common domain bit length 'b' from provided keys."
+        ));
+    }
+    info!("Calculated common domain bit length b = {}", b);
+
+    // --- Verify Ring Signature ---
+    info!("Verifying ring signature...");
+    let verify_result = ring_verify(&ring_pubs, &ring_sig, message, b)
+        .context("Failed during signature verification")?;
+
+    println!("\n--- Verification Result ---");
+    if verify_result {
+        println!("Signature is VALID.");
+        info!("Verification successful.");
+    } else {
+        println!("Signature is INVALID.");
+        info!("Verification failed.");
+    }
+    println!("--- End of Verification ---");
+
+    Ok(())
+}
+
+// --- Helper Functions for Key Loading ---
+
+fn load_public_key(fmt: &str, path: &str, _password: Option<&str>) -> Result<PublicKey> {
+    match fmt {
+        "pem" => load_public_key_from_pem(path)
+            .with_context(|| format!("Failed to load PEM public key from '{}'", path)),
+        "asc" => load_public_key_from_pgp(path)
+            .with_context(|| format!("Failed to load PGP public key from '{}'", path)),
+        _ => Err(anyhow!("Unsupported key format: {}", fmt)),
+    }
+}
+
+fn load_secret_key(fmt: &str, path: &str, password: Option<&str>) -> Result<SecretKey> {
+    match fmt {
+        "pem" => load_secret_key_from_pem(path)
+            .with_context(|| format!("Failed to load PEM secret key from '{}'", path)),
+        "asc" => {
+            // PGP keypairs are loaded together, but we only need the secret part here.
+            // We assume the public part was loaded separately or matches.
+            let keypair = load_keypair_from_pgp(path, password)
+                .with_context(|| format!("Failed to load PGP keypair from '{}'", path))?;
+            Ok(keypair.secret)
+        }
+        _ => Err(anyhow!("Unsupported key format: {}", fmt)),
+    }
 }
