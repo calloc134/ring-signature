@@ -358,6 +358,9 @@ Enter the message to sign: hello world!
 }
 --- End of Signature ---
 Save signature to a file? [y/N]
+Enter output filename: signature.json
+[2025-04-23T03:54:30Z INFO  common] Saving signature to file: signature.json
+[2025-04-23T03:54:30Z INFO  common] Signature successfully saved to signature.json
 ```
 
 以下は、署名検証モードの実行例です。
