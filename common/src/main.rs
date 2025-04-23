@@ -50,20 +50,28 @@ fn handle_sign() -> Result<()> {
     info!("--- Sign Mode ---");
 
     // Select key file format
-    let formats = &["pem", "asc"];
+    let format_options = &[
+        ("PKCS#8 format (*.pem, *.key)", "pem"),
+        ("OpenPGP ASCII Armor format (*.asc)", "asc"),
+    ];
     let fmt_idx = Select::new()
         .with_prompt("Select key file format")
-        .items(formats)
+        .items(
+            &format_options
+                .iter()
+                .map(|(display, _)| *display)
+                .collect::<Vec<_>>(),
+        )
         .default(0)
         .interact()?;
-    let fmt = formats[fmt_idx];
+    let fmt = format_options[fmt_idx].1; // Get the internal name ("pem" or "asc")
 
     // --- Load Signer Keys ---
     let signer_priv_path: String = Input::<String>::new()
         .with_prompt("Signer PRIVATE key file path")
         .default(
             match fmt {
-                "pem" => "keys/signer_private.pem",
+                "pem" => "keys/signer_private.pem", // Keep internal logic based on "pem" / "asc"
                 _ => "keys/signer_private.asc",
             }
             .to_string(),
@@ -71,17 +79,19 @@ fn handle_sign() -> Result<()> {
         .interact_text()?;
 
     let (signer_public_key, signer_secret_key) = if fmt == "pem" {
+        // Use internal name
         // PEM: Load public and private keys from separate files
         let signer_pub_path: String = Input::<String>::new()
             .with_prompt("Signer PUBLIC key file path")
             .default("keys/signer_public.pem".to_string())
             .interact_text()?;
 
-        info!("Loading PEM signer keys...");
+        info!("Loading PKCS#8 signer keys..."); // Update log message
         let secret = load_secret_key(fmt, &signer_priv_path, None)?;
         let public = load_public_key(fmt, &signer_pub_path, None)?;
         (public, secret)
     } else {
+        // "asc"
         // ASC: Load keypair from the private key file, prompt for password
         let password = Some(
             Password::new()
@@ -90,8 +100,8 @@ fn handle_sign() -> Result<()> {
                 .interact()?,
         );
 
-        info!("Loading ASC signer keypair...");
-        // Use a helper or directly call load_keypair_from_pgp
+        info!("Loading OpenPGP signer keypair..."); // Update log message
+                                                    // Use a helper or directly call load_keypair_from_pgp
         let keypair = load_keypair_from_pgp(&signer_priv_path, password.as_deref())
             .with_context(|| format!("Failed to load PGP keypair from '{}'", signer_priv_path))?;
         (keypair.public, keypair.secret)
@@ -125,6 +135,7 @@ fn handle_sign() -> Result<()> {
             ))
             .default(
                 match fmt {
+                    // Use internal name
                     "pem" => format!("keys/member{}_public.pem", member_public_keys.len() + 1),
                     _ => format!("keys/member{}_public.asc", member_public_keys.len() + 1),
                 }
@@ -282,13 +293,21 @@ fn handle_verify() -> Result<()> {
     info!("Signature JSON parsed successfully.");
 
     // --- Select Key Format ---
-    let formats = &["pem", "asc"];
+    let format_options = &[
+        ("PKCS#8 format (*.pem, *.key)", "pem"),
+        ("OpenPGP ASCII Armor format (*.asc)", "asc"),
+    ];
     let fmt_idx = Select::new()
         .with_prompt("Select key file format for ALL ring members")
-        .items(formats)
+        .items(
+            &format_options
+                .iter()
+                .map(|(display, _)| *display)
+                .collect::<Vec<_>>(),
+        )
         .default(0)
         .interact()?;
-    let fmt = formats[fmt_idx];
+    let fmt = format_options[fmt_idx].1; // Get the internal name ("pem" or "asc")
 
     // --- Load Public Keys (in order) ---
     let num_members = signature_payload.xs.len();
@@ -309,6 +328,7 @@ fn handle_verify() -> Result<()> {
             ))
             .default(
                 match fmt {
+                    // Use internal name
                     "pem" => format!("keys/member{}_public.pem", i), // Adjust default naming if needed
                     _ => format!("keys/member{}_public.asc", i),
                 }
