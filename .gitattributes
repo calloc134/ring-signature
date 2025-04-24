@@ -1,0 +1,2 @@
+# htmlファイルを除外
+*.html linguist-generated=true
