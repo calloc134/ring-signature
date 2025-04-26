@@ -13,12 +13,11 @@ use rsa::{
     traits::{PrivateKeyParts, PublicKeyParts},
     RsaPrivateKey, RsaPublicKey,
 };
+use sequoia_openpgp::crypto::mpi::PublicKey as OpenPgpPublicKey;
+use sequoia_openpgp::crypto::Password;
+use sequoia_openpgp::packet::{key::SecretKeyMaterial, Key};
 use sequoia_openpgp::parse::Parse;
 use sequoia_openpgp::policy::StandardPolicy;
-use sequoia_openpgp::{
-    crypto::{mpi::PublicKey as OpenPgpPublicKey, Password},
-    packet::{key::SecretKeyMaterial, Key},
-};
 use std::{
     fs::{self},
     io::{BufReader, Cursor},
@@ -52,11 +51,11 @@ pub struct KeyPair {
 /// 拡張RSAトラップドア関数 g(x) = q*n + r^e mod n
 /// x: 入力値
 /// b: 共通ドメインのビット長
-pub fn g(pubkey: &PublicKey, x: &BigUint, _b: usize) -> BigUint {
+pub fn g(pubkey: &PublicKey, x: &BigUint) -> BigUint {
     // 内部不変条件: n > 0, e > 0
     assert!(!pubkey.n.is_zero(), "RSA公開鍵nが0です");
     assert!(!pubkey.e.is_zero(), "RSA公開鍵eが0です");
-    trace!("g: pubkey = {:?}, x = {}, _b = {}", pubkey, x, _b);
+    trace!("g: pubkey = {:?}, x = {}", pubkey, x);
     // x を n で割った商 q と剰余 r を計算
     let (q, r) = x.div_rem(&pubkey.n);
     debug!("g: q = {}, r = {}", q, r);
@@ -72,11 +71,11 @@ pub fn g(pubkey: &PublicKey, x: &BigUint, _b: usize) -> BigUint {
 /// 拡張RSAトラップドア関数の逆関数 g⁻¹(y) = q*n + r^d mod n
 /// y: 入力値
 /// b: 共通ドメインのビット長
-pub fn g_inverse(secret: &SecretKey, y: &BigUint, _b: usize) -> BigUint {
+pub fn g_inverse(secret: &SecretKey, y: &BigUint) -> BigUint {
     // 内部不変条件: n > 0, d > 0
     assert!(!secret.n.is_zero(), "RSA秘密鍵nが0です");
     assert!(!secret.d.is_zero(), "RSA秘密鍵dが0です");
-    trace!("g_inverse: secret = {:?}, y = {}, _b = {}", secret, y, _b);
+    trace!("g_inverse: secret = {:?}, y = {}", secret, y);
     // y を n で割った商 q と剰余 r を計算
     let (q, r) = y.div_rem(&secret.n);
     debug!("g_inverse: q = {}, r = {}", q, r);
@@ -104,7 +103,7 @@ pub fn rsa_sign(key: &KeyPair, m: &BigUint, b: usize) -> Result<BigUint> {
     debug!("RSA署名生成開始: key = {:?}, m = {}", key, m);
     // g_inverseは失敗しない前提だが、将来的な拡張のためResult型に
     // 秘密鍵を用いて g 関数の逆関数を計算し、署名とする
-    let signature = g_inverse(&key.secret, m, b);
+    let signature = g_inverse(&key.secret, m);
     // infoにはビット数のみ表示し、内容はdebugで出力
     info!("RSA署名生成完了: {} bits", signature.bits());
     debug!("RSA署名生成完了: signature = {}", signature);
@@ -130,7 +129,7 @@ pub fn rsa_verify(pubkey: &PublicKey, m: &BigUint, signature: &BigUint, b: usize
         pubkey, m, signature
     );
     // 公開鍵を用いて g 関数を署名に適用し、元のメッセージ m と一致するか検証
-    let verification = g(pubkey, signature, b) == *m;
+    let verification = g(pubkey, signature) == *m;
     info!("RSA署名検証結果: {}", verification);
     Ok(verification)
 }
@@ -217,7 +216,80 @@ pub fn load_secret_key_from_pem(filepath: &str) -> Result<SecretKey> {
     Ok(SecretKey { d, n })
 }
 
-// 新規: PGP文字列からRSA公開鍵を抽出
+/// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
+/// password が必要な場合は `Some("your password")` を渡す
+pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair, RsaError> {
+    info!("Loading PGP keypair from file: {}", path);
+    let armored = fs::read_to_string(path)
+        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", path, e)))?;
+    let mut rdr = BufReader::new(Cursor::new(armored.as_bytes()));
+    let cert = sequoia_openpgp::Cert::from_reader(&mut rdr)
+        .map_err(|e| RsaError::Other(format!("Failed to parse PGP cert from file: {}", e)))?;
+    let key_binding = cert
+        .keys()
+        .secret()
+        .next()
+        .ok_or_else(|| RsaError::Other("Secret key not found".into()))?;
+    let mut key = key_binding.key().clone();
+    if key.has_secret() && !key.has_unencrypted_secret() {
+        let pw = Password::from(password.unwrap_or(""));
+        key = key
+            .decrypt_secret(&pw)
+            .map_err(|e| RsaError::Other(format!("Failed to decrypt secret key: {}", e)))?;
+    }
+    if let Key::V4(k4) = key {
+        if let SecretKeyMaterial::Unencrypted(m) = k4.secret() {
+            let pair = m.map(|f| {
+                if let sequoia_openpgp::crypto::mpi::SecretKeyMaterial::RSA { d, p, q, .. } = f {
+                    let d = BigUint::from_bytes_be(d.value());
+                    let p = BigUint::from_bytes_be(p.value());
+                    let q = BigUint::from_bytes_be(q.value());
+                    let n = &p * &q;
+                    KeyPair {
+                        public: PublicKey {
+                            n: n.clone(),
+                            e: BigUint::from(constants::E),
+                        },
+                        secret: SecretKey { n, d },
+                    }
+                } else {
+                    unreachable!()
+                }
+            });
+            return Ok(pair);
+        }
+    }
+    Err(RsaError::Other("Unsupported key version or not RSA".into()))
+}
+
+/// ASCII-armored PGP公開鍵を読み込み、RSA公開鍵を抽出
+pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
+    info!("Loading PGP public key from file: {}", filepath);
+    let armored = fs::read_to_string(filepath)
+        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", filepath, e)))?;
+    let mut rdr = BufReader::new(Cursor::new(armored.as_bytes()));
+    let cert = sequoia_openpgp::Cert::from_reader(&mut rdr)
+        .map_err(|e| RsaError::Other(format!("Failed to parse PGP cert from file: {}", e)))?;
+    let policy = &StandardPolicy::new();
+    let key = cert
+        .keys()
+        .with_policy(policy, None)
+        .alive()
+        .for_signing()
+        .next()
+        .ok_or_else(|| RsaError::Other("No valid signing key".into()))?
+        .key();
+    if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+        Ok(PublicKey {
+            n: BigUint::from_bytes_be(n.value()),
+            e: BigUint::from_bytes_be(e.value()),
+        })
+    } else {
+        Err(RsaError::Other("Not an RSA public key".into()))
+    }
+}
+
+/// Parses an ASCII-armored PGP public key string and extracts RSA public key
 pub fn load_public_key_from_pgp_str(armored: &str) -> Result<PublicKey, RsaError> {
     let mut rdr = BufReader::new(Cursor::new(armored.as_bytes()));
     let cert = sequoia_openpgp::Cert::from_reader(&mut rdr)
@@ -241,22 +313,7 @@ pub fn load_public_key_from_pgp_str(armored: &str) -> Result<PublicKey, RsaError
     }
 }
 
-// 既存: ファイル版はテキストを読み込んで上記を呼び出し
-pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
-    let txt = fs::read_to_string(filepath)
-        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", filepath, e)))?;
-    load_public_key_from_pgp_str(&txt)
-}
-
-/// PGP秘密鍵付き証明書から RSA 鍵ペアを抽出
-/// password が必要な場合は `Some("your password")` を渡す
-pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPair, RsaError> {
-    let txt = fs::read_to_string(path)
-        .map_err(|e| RsaError::Other(format!("Failed to read PGP file '{}': {}", path, e)))?;
-    load_keypair_from_pgp_str(&txt, password)
-}
-
-// 新規: PGP文字列からRSA鍵ペアを抽出
+/// Parses an ASCII-armored PGP keypair string and extracts RSA keypair
 pub fn load_keypair_from_pgp_str(
     armored: &str,
     password: Option<&str>,
@@ -287,7 +344,7 @@ pub fn load_keypair_from_pgp_str(
                     KeyPair {
                         public: PublicKey {
                             n: n.clone(),
-                            e: BigUint::from(65537u32),
+                            e: BigUint::from(constants::E),
                         },
                         secret: SecretKey { n, d },
                     }
@@ -360,22 +417,22 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // ランダムな値でテスト
         for _ in 0..10 {
-            let x = rng.gen_biguint(b as u64);
+            let x = rng.gen_biguint(_b as u64);
             // g(x) を計算
-            let y = g(&key_pair.public, &x, b);
+            let y = g(&key_pair.public, &x);
             // g_inverse(y) を計算
-            let x_prime = g_inverse(&key_pair.secret, &y, b);
+            let x_prime = g_inverse(&key_pair.secret, &y);
             // 元の x と一致するか確認
             assert_eq!(x, x_prime);
         }
         // 0 でテスト
         let x = BigUint::zero();
-        let y = g(&key_pair.public, &x, b);
-        let x_prime = g_inverse(&key_pair.secret, &y, b);
+        let y = g(&key_pair.public, &x);
+        let x_prime = g_inverse(&key_pair.secret, &y);
         assert_eq!(x, x_prime);
     }
 
@@ -385,11 +442,11 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // n - 1 でテスト
         let y = &key_pair.public.n - BigUint::one();
-        let x = g_inverse(&key_pair.secret, &y, b);
+        let x = g_inverse(&key_pair.secret, &y);
         // 期待される計算結果
         let expected_x = (&y / &key_pair.secret.n) * &key_pair.secret.n
             + y.modpow(&key_pair.secret.d, &key_pair.secret.n);
@@ -402,11 +459,11 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
 
         // 2*n でテスト
         let y = &key_pair.public.n * BigUint::from(2u32);
-        let x = g_inverse(&key_pair.secret, &y, b);
+        let x = g_inverse(&key_pair.secret, &y);
         // 期待される計算結果
         let expected_x = (&y / &key_pair.secret.n) * &key_pair.secret.n
             + y.modpow(&key_pair.secret.d, &key_pair.secret.n);
@@ -420,10 +477,10 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-        let x = rng.gen_biguint(b as u64);
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let x = rng.gen_biguint(_b as u64);
 
-        let y = g(&key_pair.public, &x, b);
+        let y = g(&key_pair.public, &x);
 
         // g(x) = q*n + r^e mod n を検証
         let (q, r) = x.div_rem(&key_pair.public.n);
@@ -439,10 +496,10 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let x = BigUint::zero();
 
-        let y = g(&key_pair.public, &x, b);
+        let y = g(&key_pair.public, &x);
 
         // x が 0 の場合、g(x) は 0^e mod n = 0 となるはず
         assert_eq!(y, BigUint::zero());
@@ -454,10 +511,10 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
-        let y = rng.gen_biguint(b as u64);
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let y = rng.gen_biguint(_b as u64);
 
-        let x = g_inverse(&key_pair.secret, &y, b);
+        let x = g_inverse(&key_pair.secret, &y);
 
         // g_inverse(y) = q*n + r^d mod n を検証
         let (q, r) = y.div_rem(&key_pair.secret.n);
@@ -473,10 +530,10 @@ mod tests {
         let mut rng = thread_rng();
         let bits = TEST_RSA_BITS;
         let key_pair = generate_keypair(bits, &mut rng).unwrap();
-        let b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
+        let _b = key_pair.public.n.bits() as usize + COMMON_DOMAIN_BIT_LENGTH_ADDITION;
         let y = BigUint::zero();
 
-        let x = g_inverse(&key_pair.secret, &y, b);
+        let x = g_inverse(&key_pair.secret, &y);
         // y が 0 の場合、g_inverse(y) は 0^d mod n = 0 となるはず
         assert_eq!(x, BigUint::zero());
     }
@@ -512,43 +569,4 @@ mod tests {
         // 逆元は存在しない
         assert_eq!(inv, None);
     }
-
-    // PEMファイルからの鍵読み込みテスト (コメントアウトされているため変更なし)
-    /*
-    #[test]
-    fn test_load_keys_from_pem() -> Result<()> {
-        // Create dummy PEM files for testing purposes in a 'test_keys' directory
-        // For example: test_keys/test_pub.pem, test_keys/test_priv.pem
-        // Ensure these files exist before running the test.
-        let test_pub_path = "test_keys/test_pub.pem";
-        let test_priv_path = "test_keys/test_priv.pem";
-
-        // Create the directory if it doesn't exist
-        fs::create_dir_all("test_keys").expect("Failed to create test_keys directory");
-
-        // Generate a keypair and save it to PEM files for the test
-        let mut rng = thread_rng();
-        let bits = TEST_RSA_BITS; // Use constant // Use a smaller size for faster test generation
-        let keypair = generate_keypair(bits, &mut rng)?;
-        let priv_pem = keypair.secret.to_pkcs1_pem(Default::default())?; // Assuming SecretKey can be converted back easily or using the 'rsa' crate's types directly
-        let pub_pem = keypair.public.to_public_key_pem(Default::default())?; // Assuming PublicKey can be converted back easily
-        fs::write(test_priv_path, priv_pem)?;
-        fs::write(test_pub_path, pub_pem)?;
-
-
-        let public_key = load_public_key_from_pem(test_pub_path)?;
-        let secret_key = load_secret_key_from_pem(test_priv_path)?;
-
-        assert_eq!(public_key.n, secret_key.n);
-        // Add more assertions if needed, e.g., comparing with original generated values
-
-        // Clean up test files
-        fs::remove_file(test_pub_path)?;
-        fs::remove_file(test_priv_path)?;
-        fs::remove_dir("test_keys")?;
-
-
-        Ok(())
-    }
-    */
 }
