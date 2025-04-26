@@ -1,4 +1,4 @@
-// New helper for API requests
+// client-tauri/src/api/index.ts
 const BASE = import.meta.env.VITE_BACKEND_URL;
 
 export async function fetchJson<T>(path: string): Promise<T> {

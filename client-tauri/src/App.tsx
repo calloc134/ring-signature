@@ -1,6 +1,7 @@
+import React, { Suspense, lazy } from "react";
 import { Route, Switch, Link, Redirect } from "wouter";
-import SignPage from "./SignPage";
-import VerifyPage from "./VerifyPage";
+const SignPage = lazy(() => import("./pages/SignPage"));
+const VerifyPage = lazy(() => import("./pages/VerifyPage"));
 import { Toaster } from "react-hot-toast";
 import "./App.css";
 
@@ -16,13 +17,15 @@ const App: React.FC = () => (
     </header>
 
     <main className=" mx-auto p-4">
-      <Switch>
-        <Route path="/" component={SignPage} />
-        <Route path="/verify" component={VerifyPage} />
-        <Route>
-          <Redirect to="/" />
-        </Route>
-      </Switch>
+      <Suspense fallback={<div>Loading...</div>}>
+        <Switch>
+          <Route path="/" component={SignPage} />
+          <Route path="/verify" component={VerifyPage} />
+          <Route>
+            <Redirect to="/" />
+          </Route>
+        </Switch>
+      </Suspense>
       <Toaster position="top-right" />
     </main>
   </>
