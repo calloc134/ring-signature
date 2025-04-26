@@ -88,6 +88,15 @@ pub async fn get_key(name: &str) -> Result<PublicKeyDto, (StatusCode, String)> {
 }
 // --- End of Moved code ---
 
+/// Pads an odd-length hexadecimal string with a leading zero
+fn pad_hex(hex: &str) -> String {
+    if hex.len() % 2 != 0 {
+        format!("0{}", hex)
+    } else {
+        hex.to_string()
+    }
+}
+
 /// Fetches public keys for a list of usernames and converts them to PublicKey structs.
 /// Ensures keys are returned in the same order as requested usernames.
 pub async fn get_public_keys_for_users(
@@ -96,36 +105,24 @@ pub async fn get_public_keys_for_users(
     let mut public_keys = Vec::with_capacity(usernames.len());
 
     for name in usernames {
-        // Use the refactored get_key function which handles caching and fetching
-        let key_dto = get_key(name).await?; // Propagates errors from get_key
+        let key_dto = get_key(name).await?;
 
-        // --- Add padding for odd length hex strings ---
-        let n_str = if key_dto.n.len() % 2 != 0 {
-            format!("0{}", key_dto.n)
-        } else {
-            key_dto.n.clone()
-        };
-        let e_str = if key_dto.e.len() % 2 != 0 {
-            format!("0{}", key_dto.e)
-        } else {
-            key_dto.e.clone()
-        };
-        // --- End of padding logic ---
+        // use pad_hex helper
+        let n_str = pad_hex(&key_dto.n);
+        let e_str = pad_hex(&key_dto.e);
 
         // Convert hex strings (n, e) from DTO to BigUint using padded strings
         let n = hex_to_biguint(&n_str).map_err(|e| {
-            // Use n_str // <--- Error likely here for 'e'
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to parse public key modulus 'n' for {}: {}", name, e),
             )
         })?;
         let e = hex_to_biguint(&e_str).map_err(|e| {
-            // Use e_str
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!(
-                    "Failed to parse public key exponent 'e' for {}: {}", // Error message remains the same
+                    "Failed to parse public key exponent 'e' for {}: {}",
                     name, e
                 ),
             )
@@ -134,8 +131,6 @@ pub async fn get_public_keys_for_users(
         public_keys.push(PublicKey { n, e });
     }
 
-    // Since we iterate in order and push, the resulting Vec<PublicKey>
-    // will correspond to the order of the input `usernames` slice.
     Ok(public_keys)
 }
 

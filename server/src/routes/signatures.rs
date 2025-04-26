@@ -65,17 +65,6 @@ async fn create_signature(
             e
         })?;
 
-    // Ensure the correct number of keys were fetched and they correspond to the members
-    // This check might be redundant if get_public_keys_for_users guarantees order and handles errors for missing users
-    // Keeping it for robustness, but consider if get_public_keys_for_users should return error if any user is not found.
-    if ring_pubs.len() != payload.members.len() {
-        // This case might be less likely now if get_public_keys_for_users errors on missing keys
-        return Err((
-            StatusCode::BAD_REQUEST, // Or INTERNAL_SERVER_ERROR depending on expected behavior
-            "Could not retrieve public keys for all specified members.".to_string(),
-        ));
-    }
-
     // --- Calculate Common Domain Bit Length 'b' ---
     let b = ring_pubs.iter().map(|pk| pk.n.bits()).max().ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
