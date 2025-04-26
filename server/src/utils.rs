@@ -89,7 +89,7 @@ pub async fn get_key(name: &str) -> Result<PublicKeyDto, (StatusCode, String)> {
 // --- End of Moved code ---
 
 /// Pads an odd-length hexadecimal string with a leading zero
-fn pad_hex(hex: &str) -> String {
+pub fn pad_hex(hex: &str) -> String {
     if hex.len() % 2 != 0 {
         format!("0{}", hex)
     } else {

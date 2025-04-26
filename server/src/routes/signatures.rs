@@ -1,6 +1,6 @@
 use crate::db::{get_signatures_for_user, insert_signature, CreateSignatureRequest};
 use crate::models::{CreateSignatureDto, CreateSignatureResponse, SignatureRecordDto};
-use crate::utils::get_public_keys_for_users; // Import from utils
+use crate::utils::{get_public_keys_for_users, pad_hex}; // <-- add this import
 use axum::{
     extract::{Extension, Path},
     http::StatusCode,
@@ -28,13 +28,18 @@ async fn create_signature(
     Json(payload): Json<CreateSignatureDto>,
 ) -> Result<Json<CreateSignatureResponse>, (StatusCode, String)> {
     // --- Input Parsing and Basic Validation ---
-    let v_biguint = hex_to_biguint(&payload.v)
+    // pad and parse v
+    let v_hex = pad_hex(&payload.v);
+    let v_biguint = hex_to_biguint(&v_hex)
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid v format: {}", e)))?;
+
+    // pad and parse xs
     let xs_biguint: Vec<BigUint> = payload
         .xs
         .iter()
         .map(|x| {
-            hex_to_biguint(x).map_err(|e| {
+            let x_hex = pad_hex(x);
+            hex_to_biguint(&x_hex).map_err(|e| {
                 (
                     StatusCode::BAD_REQUEST,
                     format!("Invalid x format '{}': {}", x, e),
