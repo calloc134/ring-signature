@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchJson } from "./api";
 
 interface SignatureRecord {
   id: string;
@@ -24,36 +25,24 @@ const VerifyPage: React.FC = () => {
     refetch,
   } = useQuery<SignatureRecord[], Error>({
     queryKey: ["signatures", username],
-    queryFn: async () => {
-      const baseUrl = import.meta.env.VITE_BACKEND_URL;
-      const res = await fetch(`${baseUrl}/signatures/${username}`);
-      if (!res.ok) throw new Error("Failed to fetch signatures");
-      return (await res.json()) as SignatureRecord[];
-    },
+    queryFn: () => fetchJson<SignatureRecord[]>(`/signatures/${username}`),
     enabled: false,
   });
 
   const queryClient = useQueryClient();
 
-  const handleFetch = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!username) return toast.error("Enter Keybase user ID");
+  const handleFetch = (e: React.FormEvent) => {
+    e.preventDefault();
     refetch();
   };
 
   const handleVerify = async (rec: SignatureRecord) => {
     setVerifying((p) => ({ ...p, [rec.id]: true }));
     try {
+      const keyKey = rec.members.join(",");
       const pubkeys = await queryClient.fetchQuery<string[]>({
-        queryKey: ["pubkeys", rec.members],
-        queryFn: async () => {
-          const baseUrl = import.meta.env.VITE_BACKEND_URL;
-          const res = await fetch(
-            `${baseUrl}/keys?names=${rec.members.join(",")}`
-          );
-          if (!res.ok) throw new Error("Failed to fetch public keys");
-          return (await res.json()) as string[];
-        },
+        queryKey: ["pubkeys", keyKey],
+        queryFn: () => fetchJson<string[]>(`/keys?names=${keyKey}`),
       });
       const ok = (await invoke("ring_verify", {
         pubkeys,

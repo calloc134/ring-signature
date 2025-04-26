@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { invoke } from "@tauri-apps/api/core";
 import { useDropzone } from "react-dropzone";
 import { useMutation } from "@tanstack/react-query";
+import { fetchJson, postJson } from "./api";
 
 // variables for mutation
 interface SignatureVariables {
@@ -78,33 +79,27 @@ const SignPage: React.FC = () => {
       message,
       signerIndex,
     }) => {
-      const baseUrl = import.meta.env.VITE_BACKEND_URL;
-      // fetch pubkeys
-      const resp = await fetch(`${baseUrl}/keys?names=${users.join(",")}`);
-      if (!resp.ok) throw new Error("Failed to fetch public keys");
-      const pubkeys = await resp.json();
+      // fetch public keys
+      const pubkeys = await fetchJson<string[]>(
+        `/keys?names=${users.join(",")}`
+      );
 
-      // ring sign
+      // ring sign via Tauri command
       const sig = (await invoke("ring_sign", {
         pubkeys,
         armoredSecret: secretContent,
         password,
         message,
         signerIndex,
-      })) as { v: string; xs: string[] };
+      })) as SignatureResult;
 
-      // post signature
-      const postRes = await fetch(`${baseUrl}/signatures`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          v: sig.v,
-          xs: sig.xs,
-          members: users,
-          message,
-        }),
+      // send signature to server
+      await postJson<SignatureResult>(`/signatures`, {
+        v: sig.v,
+        xs: sig.xs,
+        members: users,
+        message,
       });
-      if (!postRes.ok) throw new Error("Failed to send signature");
       return sig;
     },
     onSuccess: () => {
