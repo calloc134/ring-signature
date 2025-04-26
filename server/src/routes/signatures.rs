@@ -1,6 +1,6 @@
 use crate::db::{get_signatures_for_user, insert_signature, CreateSignatureRequest};
 use crate::models::{CreateSignatureDto, CreateSignatureResponse, SignatureRecordDto};
-use crate::utils::get_public_keys_for_users; // Import from utils
+use crate::utils::{get_public_keys_for_users, pad_hex}; // <-- add this import
 use axum::{
     extract::{Extension, Path},
     http::StatusCode,
@@ -28,13 +28,18 @@ async fn create_signature(
     Json(payload): Json<CreateSignatureDto>,
 ) -> Result<Json<CreateSignatureResponse>, (StatusCode, String)> {
     // --- Input Parsing and Basic Validation ---
-    let v_biguint = hex_to_biguint(&payload.v)
+    // pad and parse v
+    let v_hex = pad_hex(&payload.v);
+    let v_biguint = hex_to_biguint(&v_hex)
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid v format: {}", e)))?;
+
+    // pad and parse xs
     let xs_biguint: Vec<BigUint> = payload
         .xs
         .iter()
         .map(|x| {
-            hex_to_biguint(x).map_err(|e| {
+            let x_hex = pad_hex(x);
+            hex_to_biguint(&x_hex).map_err(|e| {
                 (
                     StatusCode::BAD_REQUEST,
                     format!("Invalid x format '{}': {}", x, e),
@@ -64,17 +69,6 @@ async fn create_signature(
             // Propagate the status code and message from get_public_keys_for_users
             e
         })?;
-
-    // Ensure the correct number of keys were fetched and they correspond to the members
-    // This check might be redundant if get_public_keys_for_users guarantees order and handles errors for missing users
-    // Keeping it for robustness, but consider if get_public_keys_for_users should return error if any user is not found.
-    if ring_pubs.len() != payload.members.len() {
-        // This case might be less likely now if get_public_keys_for_users errors on missing keys
-        return Err((
-            StatusCode::BAD_REQUEST, // Or INTERNAL_SERVER_ERROR depending on expected behavior
-            "Could not retrieve public keys for all specified members.".to_string(),
-        ));
-    }
 
     // --- Calculate Common Domain Bit Length 'b' ---
     let b = ring_pubs.iter().map(|pk| pk.n.bits()).max().ok_or((

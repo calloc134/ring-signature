@@ -157,29 +157,4 @@ mod tests {
             "b=64で失敗"
         );
     }
-
-    // 暗号化と復号の一貫性テスト (test_symmetric_encryption と重複するが、元のテスト名を維持)
-    #[test]
-    fn test_encryption_decryption() {
-        let mut rng = thread_rng();
-        let b = 256;
-        for _ in 0..10 {
-            let k = rng.gen_biguint(b as u64);
-            let x = rng.gen_biguint(b as u64);
-
-            // 暗号化 (e_k)
-            let masked_x = e_k(&k, &x, b);
-            // 復号 (d_k)
-            let unmasked_x = d_k(&k, &masked_x, b);
-
-            // 元の平文 (b ビットマスク済み) と復号結果が一致するか確認
-            // 注意: 元のテストでは x % (BigUint::one() << b) と比較すべきだが、
-            //       現在の実装では e_k/d_k 内で剰余を取るため、x と直接比較しても
-            //       多くの場合成功する。厳密にはマスクした値と比較すべき。
-            //       ここでは元のテストコードの assert_eq!(x, unmasked_x) を維持する。
-            //       ただし、x が b ビットを超える場合、このアサーションは失敗する可能性がある。
-            //       より正確なテストは test_symmetric_encryption を参照。
-            assert_eq!(x % (BigUint::one() << b), unmasked_x); // 修正: マスクした値と比較
-        }
-    }
 }

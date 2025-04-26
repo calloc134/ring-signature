@@ -85,7 +85,7 @@ pub fn ring_sign(
         xs[i] = rng.gen_biguint(b as u64);
         debug!("ring_sign: xs[{}] = {}", i, xs[i]);
         // 中間値 y_i = g(x_i) を計算
-        ys[i] = g(&ring[i], &xs[i], b);
+        ys[i] = g(&ring[i], &xs[i]);
         debug!("ring_sign: ys[{}] = {}", i, ys[i]);
     }
 
@@ -116,7 +116,7 @@ pub fn ring_sign(
     ys[signer] = y_s.clone();
 
     // 署名者の秘密鍵を用いて寄与 x_s を計算 (x_s = g⁻¹(y_s))
-    xs[signer] = g_inverse(signer_secret, &y_s, b);
+    xs[signer] = g_inverse(signer_secret, &y_s);
     debug!("ring_sign: xs[{}] = {}", signer, xs[signer]);
 
     // リング署名オブジェクトを作成
@@ -162,7 +162,7 @@ pub fn ring_verify(ring: &[PublicKey], sig: &RingSignature, m: &[u8], b: usize) 
     // 各リングメンバーについて検証計算を実行
     for i in 0..r {
         // メンバー i の公開鍵と寄与 x_i から中間値 y_i = g(x_i) を計算
-        let y = g(&ring[i], &sig.xs[i], b);
+        let y = g(&ring[i], &sig.xs[i]);
         debug!("ring_verify: y[{}] = {}", i, y);
         // y_i と t の XOR を計算
         let y_xor_t = y ^ t;
