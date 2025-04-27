@@ -148,3 +148,34 @@ where
         .map(ToString::to_string)
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+    use serde_json;
+
+    #[test]
+    fn test_pad_hex_even() {
+        assert_eq!(pad_hex("abcd"), "abcd");
+    }
+
+    #[test]
+    fn test_pad_hex_odd() {
+        assert_eq!(pad_hex("abc"), "0abc");
+    }
+
+    #[derive(Deserialize)]
+    struct Names {
+        #[serde(deserialize_with = "comma_separated")]
+        names: Vec<String>,
+    }
+
+    #[test]
+    fn test_deserialize_comma_separated() {
+        // Use raw JSON string without escape sequences
+        let json = r#"{"names":"a, b, ,c"}"#;
+        let data: Names = serde_json::from_str(json).unwrap();
+        assert_eq!(data.names, vec!["a", "b", "c"]);
+    }
+}

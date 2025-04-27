@@ -1,32 +1,12 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use crate::models::{CreateSignatureDto, SignatureRecordDto};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
-pub struct CreateSignatureRequest {
-    pub v: String,
-    pub xs: Vec<String>,
-    pub members: Vec<String>,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SignatureRecord {
-    pub id: Uuid,
-    pub v: String,
-    pub message: String,
-    pub xs: Vec<String>,
-    pub members: Vec<String>,
-    pub created_at: DateTime<Utc>,
-}
-
-pub async fn insert_signature(
-    pool: &PgPool,
-    req: CreateSignatureRequest,
-) -> Result<Uuid, sqlx::Error> {
+/// Inserts a new signature record into the database and returns its UUID.
+pub async fn insert_signature(pool: &PgPool, req: CreateSignatureDto) -> Result<Uuid, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
+    // Insert into signatures table
     let row = sqlx::query!(
         r#"INSERT INTO signatures (v, message) VALUES ($1, $2) RETURNING id"#,
         req.v,
@@ -36,6 +16,7 @@ pub async fn insert_signature(
     .await?;
     let sig_id = row.id;
 
+    // Insert each member and x value
     for (idx, (user, x)) in req.members.iter().zip(req.xs.iter()).enumerate() {
         sqlx::query!(
             r#"INSERT INTO signature_members
@@ -54,10 +35,11 @@ pub async fn insert_signature(
     Ok(sig_id)
 }
 
+/// Retrieves signature records for a given username, returning DTOs.
 pub async fn get_signatures_for_user(
     pool: &PgPool,
     username: &str,
-) -> Result<Vec<SignatureRecord>, sqlx::Error> {
+) -> Result<Vec<SignatureRecordDto>, sqlx::Error> {
     let rows = sqlx::query!(
         r#"
         SELECT s.id, s.v, s.message, s.created_at, sm.position, sm.member_username, sm.x_value
@@ -75,14 +57,14 @@ pub async fn get_signatures_for_user(
 
     let mut records = Vec::new();
     let mut current_id = None;
-    let mut current: Option<SignatureRecord> = None;
+    let mut current: Option<SignatureRecordDto> = None;
     for row in rows {
         if Some(row.id) != current_id {
             if let Some(rec) = current.take() {
                 records.push(rec);
             }
             current_id = Some(row.id);
-            current = Some(SignatureRecord {
+            current = Some(SignatureRecordDto {
                 id: row.id,
                 v: row.v,
                 message: row.message,
