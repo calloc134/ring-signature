@@ -4,9 +4,11 @@ use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-mod db;
+mod domain;
+mod repositories;
+mod usecases;
+mod handlers;
 mod models;
-mod routes;
 mod utils;
 
 // Shuttleでデプロイできるような実装に変更
@@ -27,8 +29,8 @@ async fn main(#[shuttle_shared_db::Postgres] pool: PgPool) -> shuttle_axum::Shut
         .map_err(CustomError::new)?;
 
     let app = Router::new()
-        .merge(routes::users::router())
-        .merge(routes::signatures::router())
+        .merge(handlers::users::router())
+        .merge(handlers::signatures::router())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .layer(Extension(pool));
