@@ -1,17 +1,19 @@
+use crate::models::{CreateSignatureDto, CreateSignatureResponse, SignatureRecordDto};
+use crate::usecases::signature_usecase::{
+    create_signature as uc_create, fetch_signatures as uc_fetch,
+};
 use axum::{
     extract::{Extension, Path},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
-use crate::models::{CreateSignatureDto, CreateSignatureResponse, SignatureRecordDto};
-use crate::usecases::signature_usecase::{create_signature as uc_create, fetch_signatures as uc_fetch};
 use sqlx::PgPool;
 
 pub fn router() -> Router {
     Router::new()
         .route("/signatures", post(create_signature))
-        .route("/signatures/:username", get(fetch_signatures))
+        .route("/signatures/{username}", get(fetch_signatures))
 }
 
 async fn create_signature(
