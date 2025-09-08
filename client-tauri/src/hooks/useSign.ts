@@ -14,7 +14,7 @@ export function useSign() {
       signerIndex,
     }) => {
       const pubkeys = await fetchJson<string[]>(
-        `/keys?names=${users.join(",")}`
+        `/users?names=${users.join(",")}`
       );
       const sig = (await invoke("ring_sign", {
         pubkeys,
