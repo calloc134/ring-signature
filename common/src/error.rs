@@ -12,6 +12,9 @@ pub enum RsaError {
     // 素数生成に失敗
     #[error("prime generation failed")]
     PrimeGen,
+    // 不正な公開指数（Carmichael鍵攻撃対策）
+    #[error("invalid public exponent: expected 65537, got {actual}. Non-standard exponents may indicate a malicious key (Carmichael key attack).")]
+    InvalidPublicExponent { actual: String },
     // その他のエラー
     #[error("other error: {0}")]
     Other(String),

@@ -262,6 +262,20 @@ pub fn load_keypair_from_pgp(path: &str, password: Option<&str>) -> Result<KeyPa
     Err(RsaError::Other("Unsupported key version or not RSA".into()))
 }
 
+/// 許可される公開指数（セキュリティ対策: Carmichael鍵攻撃を防ぐため）
+const ALLOWED_PUBLIC_EXPONENT: u32 = 65537;
+
+/// 公開指数が安全な値（65537）であることを検証する
+fn validate_public_exponent(e: &BigUint) -> Result<(), RsaError> {
+    let expected = BigUint::from(ALLOWED_PUBLIC_EXPONENT);
+    if e != &expected {
+        return Err(RsaError::InvalidPublicExponent {
+            actual: e.to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// ASCII-armored PGP公開鍵を読み込み、RSA公開鍵を抽出
 pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
     info!("Loading PGP public key from file: {}", filepath);
@@ -280,9 +294,15 @@ pub fn load_public_key_from_pgp(filepath: &str) -> Result<PublicKey, RsaError> {
         .ok_or_else(|| RsaError::Other("No valid signing key".into()))?
         .key();
     if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+        let e_biguint = BigUint::from_bytes_be(e.value());
+        let n_biguint = BigUint::from_bytes_be(n.value());
+
+        // 公開指数の検証（Carmichael鍵攻撃対策）
+        validate_public_exponent(&e_biguint)?;
+
         Ok(PublicKey {
-            n: BigUint::from_bytes_be(n.value()),
-            e: BigUint::from_bytes_be(e.value()),
+            n: n_biguint,
+            e: e_biguint,
         })
     } else {
         Err(RsaError::Other("Not an RSA public key".into()))
@@ -304,9 +324,15 @@ pub fn load_public_key_from_pgp_str(armored: &str) -> Result<PublicKey, RsaError
         .ok_or_else(|| RsaError::Other("No valid signing key".into()))?
         .key();
     if let OpenPgpPublicKey::RSA { ref e, ref n } = key.mpis() {
+        let e_biguint = BigUint::from_bytes_be(e.value());
+        let n_biguint = BigUint::from_bytes_be(n.value());
+
+        // 公開指数の検証（Carmichael鍵攻撃対策）
+        validate_public_exponent(&e_biguint)?;
+
         Ok(PublicKey {
-            n: BigUint::from_bytes_be(n.value()),
-            e: BigUint::from_bytes_be(e.value()),
+            n: n_biguint,
+            e: e_biguint,
         })
     } else {
         Err(RsaError::Other("Not an RSA public key".into()))
